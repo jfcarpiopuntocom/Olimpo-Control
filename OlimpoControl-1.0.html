@@ -659,7 +659,15 @@
       <div class="sub">Tu negocio, en colores</div>
     </div>
   </div>
-  <div class="selector-ubicacion">
+  <!--
+    UBICACIONES — DORMANT (desactivado por pedido de JFC, 2026-06-30, "hasta nuevo aviso").
+    NO BORRAR. El selector se oculta con style="display:none" y queda con su valor por
+    defecto "todas", así toda la app sigue funcionando como una sola ubicación. El backend,
+    el seed y la lógica de filtrado por ubicación siguen intactos en server.js/data.js.
+    Para REACTIVAR: quitar el style="display:none" de abajo (y nada más). No se eliminó
+    código para no romper nada ni hacer cambios no autorizados fuera de este alcance.
+  -->
+  <div class="selector-ubicacion" style="display:none">
     <select id="selectUbicacion"></select>
   </div>
 </header>
@@ -1325,16 +1333,45 @@ async function cargarAvanzado(){
 // separadas: DUEÑO y EMPLEADO. Dentro de la del dueño, la info contable
 // (cuentas T, P&L, balance) queda detrás de una SUBCLAVE aparte.
 //
-// La clave es un PIN de 3 dígitos. Cada dígito 0-9 se muestra como un trío
-// de emojis (3 emojis por dígito). El usuario toca 3 teclas = 3 dígitos.
+// ===========================================================================
+// NOTAS DE DISEÑO (no visibles al usuario — comentarios de mantenimiento)
+// ---------------------------------------------------------------------------
+// La clave es un PIN de 3 DÍGITOS. El backbone real y lo que se compara es el
+// número (ej. "159"). Cada tecla del pad MUESTRA su dígito (el usuario ve y
+// toca dígitos) y, como adorno, unos emojis.
+//
+// SEGURIDAD / por qué los emojis se BARAJAN en cada carga:
+//   En la versión anterior cada dígito tenía un TRÍO FIJO de emojis. Eso era
+//   un fallo: el trío fijo ERA el dígito a la vista de cualquiera (delataba el
+//   código). Ahora los emojis se reparten aleatoriamente entre las teclas en
+//   cada apertura del candado (son intercambiables, no forman un grupo fijo
+//   por dígito) y las casillas de la clave se ENMASCARAN con ● al ingresar.
+//   Así ni el adorno ni las casillas revelan el código interno.
+//
+// Si en el futuro JFC quiere que la clave se ingrese por emojis en vez de por
+// dígitos, el cambio es: mapear cada emoji tocado a su dígito subyacente. Hoy
+// se ingresa por dígito (lo pidió explícitamente: "agrega dígitos").
+// ===========================================================================
 (function () {
-  // --- Mapa dígito -> trío de emojis (lo visible). El backbone es numérico. ---
-  const TRIOS = {
-    0: "🔑🗝️🔒", 1: "🍊🔥🌵", 2: "🐉🌊🍀", 3: "⭐🌙☀️", 4: "🦜🐢🦋",
-    5: "🌶️🍋🫐", 6: "🎸🥁🎺", 7: "🏔️⛰️🗻", 8: "🦕🐢🐌", 9: "🛶🚲🏍️",
-  };
+  // Pool de emojis de adorno. Se barajan; ninguno está atado a un dígito fijo.
+  const EMOJI_POOL = [
+    "🍊", "🔥", "🌵", "🐉", "🌊", "🍀", "⭐", "🌙", "☀️", "🦜",
+    "🐢", "🦋", "🌶️", "🍋", "🫐", "🎸", "🥁", "🎺", "🏔️", "🛶",
+    "🚲", "🏍️", "🔑", "🌻", "🐬", "🍄",
+  ];
+
+  // Fisher-Yates: baraja una copia del arreglo (no muta el original).
+  function barajar(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
 
   // --- Claves por defecto (el dueño puede cambiarlas en Avanzado) ---
+  // owner = clave del dueño · empleados[] = subclaves de empleado · acct = subclave contable
   const DEF = { owner: "159", empleados: ["260"], acct: "357", email: "" };
   function cfg() {
     try { return JSON.parse(localStorage.getItem("oc_auth") || "null") || { ...DEF }; }
@@ -1354,20 +1391,23 @@ async function cargarAvanzado(){
     border-radius:8px;padding:26px 22px;max-width:420px;width:100%;text-align:center;}
   #oc-gate h2{font-family:var(--font-display,sans-serif);color:var(--ink,#211c14);font-size:22px;margin:0 0 4px;}
   #oc-gate .sub{font-size:14px;color:var(--ink-soft,#5d5340);margin-bottom:18px;}
-  #oc-slots{display:flex;gap:10px;justify-content:center;margin-bottom:16px;}
-  #oc-slots .slot{width:64px;height:54px;border:2px solid var(--azul-medio,#2c4a68);border-radius:6px;
-    display:flex;align-items:center;justify-content:center;font-size:20px;background:var(--crema,#f3e8cd);}
-  #oc-slots .slot.lleno{border-color:var(--rust,#b2461f);}
-  #oc-pad{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
-  #oc-pad button{font-size:19px;padding:12px 4px;line-height:1.1;border:2px solid var(--ink,#211c14);
-    border-radius:6px;background:var(--crema,#f3e8cd);cursor:pointer;min-height:48px;}
-  #oc-pad button:active{transform:translateY(1px);}
-  #oc-acciones{display:flex;gap:8px;margin-top:14px;}
-  #oc-acciones button{flex:1;font-family:var(--font-display,sans-serif);font-size:14px;padding:12px;
+  .oc-slots{display:flex;gap:10px;justify-content:center;margin-bottom:16px;}
+  .oc-slots .slot{width:58px;height:58px;border:2px solid var(--azul-medio,#2c4a68);border-radius:6px;
+    display:flex;align-items:center;justify-content:center;font-size:26px;background:var(--crema,#f3e8cd);color:var(--ink,#211c14);}
+  .oc-slots .slot.lleno{border-color:var(--rust,#b2461f);}
+  .oc-pad{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+  .oc-pad button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    padding:8px 4px;border:2px solid var(--ink,#211c14);border-radius:6px;background:var(--crema,#f3e8cd);
+    cursor:pointer;min-height:54px;}
+  .oc-pad button .dig{font-family:var(--font-display,sans-serif);font-weight:700;font-size:20px;color:var(--ink,#211c14);line-height:1;}
+  .oc-pad button .emo{font-size:13px;line-height:1;}
+  .oc-pad button:active{transform:translateY(1px);}
+  .oc-acciones{display:flex;gap:8px;margin-top:14px;}
+  .oc-acciones button{flex:1;font-family:var(--font-display,sans-serif);font-size:14px;padding:12px;
     border-radius:6px;border:2px solid var(--azul-medio,#2c4a68);background:var(--blanco-calido,#fbf5e8);
     color:var(--azul-medio,#2c4a68);cursor:pointer;min-height:44px;text-transform:uppercase;}
-  #oc-msg{min-height:20px;font-size:14px;font-weight:700;color:var(--rojo,#a3392a);margin-top:12px;}
-  #oc-gate.err .caja{animation:ocshake .35s;}
+  .oc-msg{min-height:20px;font-size:14px;font-weight:700;color:var(--rojo,#a3392a);margin-top:12px;}
+  #oc-gate.err .caja,.oc-subgate.err .caja{animation:ocshake .35s;}
   @keyframes ocshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
   #oc-logout{font-family:var(--font-display,sans-serif);font-size:13px;padding:8px 12px;border-radius:5px;
     border:2px solid var(--brass,#9c7a35);background:transparent;color:var(--blanco-calido,#fbf5e8);
@@ -1378,40 +1418,86 @@ async function cargarAvanzado(){
   #oc-acct-lock button{font-family:var(--font-display,sans-serif);font-size:14px;padding:12px 20px;
     border-radius:6px;border:2px solid var(--rust,#b2461f);background:var(--rust,#b2461f);
     color:var(--blanco-calido,#fbf5e8);cursor:pointer;min-height:44px;}
+  .oc-subgate{position:fixed;inset:0;z-index:9999;background:rgba(28,48,73,0.92);
+    display:flex;align-items:center;justify-content:center;padding:20px;}
   `;
   document.head.appendChild(css);
 
-  // ---------- Gate DOM ----------
+  // ---------------------------------------------------------------------------
+  // Construye un teclado de PIN reutilizable (lo usan el candado principal y el
+  // de la subclave contable). Cada vez que se llama, BARAJA los emojis de
+  // adorno entre las teclas. Las teclas muestran el dígito (lo que el usuario
+  // toca) más emojis decorativos.
+  //   padEl   : contenedor del grid de teclas
+  //   slotsEl : contenedor de las 3 casillas (se enmascaran con ●)
+  //   onComplete(code) : callback cuando se ingresan 3 dígitos
+  // Devuelve un objeto { reset } para limpiar la entrada.
+  // ---------------------------------------------------------------------------
+  function montarTeclado(padEl, slotsEl, onComplete) {
+    let entrada = [];
+    const pool = barajar(EMOJI_POOL); // adorno barajado por sesión de teclado
+    // Render de teclas 0-9 (dígitos en orden, visibles). A cada tecla le toca
+    // un emoji distinto del pool barajado (intercambiable, no fijo por dígito).
+    padEl.innerHTML = "";
+    for (let d = 0; d <= 9; d++) {
+      const b = document.createElement("button");
+      b.dataset.d = String(d);
+      b.innerHTML = `<span class="dig">${d}</span><span class="emo">${pool[d % pool.length]}</span>`;
+      padEl.appendChild(b);
+    }
+    const slots = () => slotsEl.querySelectorAll(".slot");
+    function pintar() {
+      slots().forEach((s, i) => {
+        if (entrada[i] != null) { s.textContent = "●"; s.classList.add("lleno"); } // enmascarado: no delata
+        else { s.textContent = ""; s.classList.remove("lleno"); }
+      });
+    }
+    padEl.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-d]"); if (!b || entrada.length >= 3) return;
+      entrada.push(Number(b.dataset.d));
+      pintar();
+      if (entrada.length === 3) setTimeout(() => onComplete(entrada.join("")), 150);
+    });
+    pintar();
+    return { reset: () => { entrada = []; pintar(); } };
+  }
+
+  // ---------- Candado principal (DUEÑO / EMPLEADO) ----------
   const gate = document.createElement("div");
   gate.id = "oc-gate";
-  const padKeys = Object.keys(TRIOS).map((d) => `<button data-d="${d}">${TRIOS[d]}</button>`).join("");
   gate.innerHTML = `
     <div class="caja">
       <h2>Olimpo Control</h2>
-      <div class="sub">Toca tu clave de 3 emojis para entrar</div>
-      <div id="oc-slots"><div class="slot"></div><div class="slot"></div><div class="slot"></div></div>
-      <div id="oc-pad">${padKeys}</div>
-      <div id="oc-acciones">
+      <div class="sub">Toca tu clave de 3 dígitos para entrar</div>
+      <div class="oc-slots" id="oc-slots"><div class="slot"></div><div class="slot"></div><div class="slot"></div></div>
+      <div class="oc-pad" id="oc-pad"></div>
+      <div class="oc-acciones">
         <button id="oc-borrar">Borrar</button>
         <button id="oc-recuperar">¿Olvidaste?</button>
       </div>
-      <div id="oc-msg"></div>
+      <div class="oc-msg" id="oc-msg"></div>
     </div>`;
   document.body.appendChild(gate);
 
-  let entrada = []; // dígitos ingresados
-  const slots = () => gate.querySelectorAll("#oc-slots .slot");
-  function pintar() {
-    slots().forEach((s, i) => {
-      if (entrada[i] != null) { s.textContent = TRIOS[entrada[i]]; s.classList.add("lleno"); s.style.fontSize = "13px"; }
-      else { s.textContent = ""; s.classList.remove("lleno"); }
-    });
+  let teclado = null;
+  function nuevoTeclado() {
+    // Re-monta el teclado (re-baraja emojis) cada vez que aparece el candado.
+    teclado = montarTeclado($("oc-pad"), $("oc-slots"), validar);
   }
+  function $(id) { return document.getElementById(id); }
+
   function error(txt) {
-    gate.querySelector("#oc-msg").textContent = txt;
+    $("oc-msg").style.color = "var(--rojo,#a3392a)";
+    $("oc-msg").textContent = txt;
     gate.classList.add("err");
     setTimeout(() => gate.classList.remove("err"), 400);
-    entrada = []; pintar();
+    nuevoTeclado(); // limpia y re-baraja
+  }
+  function validar(code) {
+    const c = cfg();
+    if (code === c.owner) return entrar("dueno");
+    if ((c.empleados || []).includes(code)) return entrar("empleado");
+    error("Clave incorrecta. Intenta de nuevo.");
   }
   function entrar(nuevoRol) {
     rol = nuevoRol;
@@ -1419,36 +1505,18 @@ async function cargarAvanzado(){
     document.body.classList.toggle("rol-dueno", rol === "dueno");
     gate.style.display = "none";
     montarLogout();
-    // Si estaba en una vista oculta para empleado, vuelve a Hoy
-    if (rol === "empleado") {
-      const nav = document.querySelector('nav button[data-vista="hoy"]');
-      if (nav) nav.click();
-    }
+    if (rol === "empleado") { const n = document.querySelector('nav button[data-vista="hoy"]'); if (n) n.click(); }
     window.dispatchEvent(new CustomEvent("oc-login", { detail: { rol } }));
   }
-  function validar() {
-    const code = entrada.join("");
-    const c = cfg();
-    if (code === c.owner) return entrar("dueno");
-    if ((c.empleados || []).includes(code)) return entrar("empleado");
-    error("Clave incorrecta. Intenta de nuevo.");
-  }
 
-  gate.querySelector("#oc-pad").addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-d]"); if (!b) return;
-    if (entrada.length >= 3) return;
-    entrada.push(Number(b.dataset.d));
-    pintar();
-    gate.querySelector("#oc-msg").textContent = "";
-    if (entrada.length === 3) setTimeout(validar, 150);
-  });
-  gate.querySelector("#oc-borrar").addEventListener("click", () => { entrada = []; pintar(); gate.querySelector("#oc-msg").textContent = ""; });
-  gate.querySelector("#oc-recuperar").addEventListener("click", () => {
+  $("oc-borrar").addEventListener("click", () => { $("oc-msg").textContent = ""; if (teclado) teclado.reset(); });
+  $("oc-recuperar").addEventListener("click", () => {
     const c = cfg();
-    if (!c.email) { gate.querySelector("#oc-msg").style.color = "var(--ink-soft,#5d5340)"; gate.querySelector("#oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado."; return; }
-    gate.querySelector("#oc-msg").style.color = "var(--verde,#2f7a4f)";
-    gate.querySelector("#oc-msg").textContent = `Se enviaría un enlace de recuperación a ${enmascarar(c.email)} (demo: no se envía correo real).`;
+    if (!c.email) { $("oc-msg").style.color = "var(--ink-soft,#5d5340)"; $("oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado."; return; }
+    $("oc-msg").style.color = "var(--verde,#2f7a4f)";
+    $("oc-msg").textContent = `Se enviaría un enlace de recuperación a ${enmascarar(c.email)} (demo: no se envía correo real).`;
   });
+  nuevoTeclado();
 
   // ---------- Logout en el header ----------
   function montarLogout() {
@@ -1459,51 +1527,49 @@ async function cargarAvanzado(){
     b.id = "oc-logout"; b.textContent = "Salir";
     b.addEventListener("click", () => {
       rol = null; document.body.classList.remove("rol-empleado", "rol-dueno");
-      entrada = []; pintar(); gate.querySelector("#oc-msg").textContent = "";
+      $("oc-msg").textContent = ""; nuevoTeclado();
       gate.style.display = "flex"; b.remove();
     });
     header.appendChild(b);
   }
 
-  // ---------- Utilidades expuestas para la vista Avanzado ----------
+  // ---------- Utilidades ----------
+  // Ofusca un correo: primera letra + puntos + dominio (j•••@gmail.com).
   function enmascarar(email) {
     const [u, dom] = String(email).split("@");
     if (!dom) return "•••";
-    const visible = u.slice(0, 1);
-    return `${visible}${"•".repeat(Math.max(2, u.length - 1))}@${dom}`;
+    return `${u.slice(0, 1)}${"•".repeat(Math.max(2, u.length - 1))}@${dom}`;
   }
 
+  // Expuesto para la vista Avanzado (capa contable).
   window.OCAuth = {
     rolActual: () => rol,
-    cfg, guardar, enmascarar, TRIOS,
-    // Pide la subclave contable; resuelve true/false
+    cfg, guardar, enmascarar,
+    // Pide la subclave contable con su propio teclado (emojis barajados, casillas enmascaradas).
     pedirSubclaveContable() {
       return new Promise((resolve) => {
         const c = cfg();
-        // Reusar el mismo gate visual sería complejo; pedimos por un mini-prompt de emojis.
         const cont = document.createElement("div");
-        cont.id = "oc-gate"; cont.style.background = "rgba(28,48,73,0.92)";
-        const keys = Object.keys(TRIOS).map((d) => `<button data-d="${d}">${TRIOS[d]}</button>`).join("");
-        cont.innerHTML = `<div class="caja"><h2>Capa contable</h2>
-          <div class="sub">Subclave de 3 emojis para ver cuentas T, P&amp;G y balance</div>
-          <div id="oc-slots2" style="display:flex;gap:10px;justify-content:center;margin-bottom:16px;">
-            <div class="slot"></div><div class="slot"></div><div class="slot"></div></div>
-          <div id="oc-pad">${keys}</div>
-          <div id="oc-acciones"><button id="sc-cancelar">Cancelar</button><button id="sc-borrar">Borrar</button></div>
-          <div id="oc-msg"></div></div>`;
+        cont.className = "oc-subgate";
+        cont.innerHTML = `<div class="caja" style="background:var(--blanco-calido,#fbf5e8);border:2px solid var(--brass,#9c7a35);border-radius:8px;padding:26px 22px;max-width:420px;width:100%;text-align:center;">
+          <h2 style="font-family:var(--font-display,sans-serif);color:var(--ink,#211c14);font-size:22px;margin:0 0 4px;">Capa contable</h2>
+          <div class="sub" style="font-size:14px;color:var(--ink-soft,#5d5340);margin-bottom:18px;">Subclave de 3 dígitos para ver cuentas T, P&amp;G y balance</div>
+          <div class="oc-slots" id="oc-slots2"><div class="slot"></div><div class="slot"></div><div class="slot"></div></div>
+          <div class="oc-pad" id="oc-pad2"></div>
+          <div class="oc-acciones"><button id="sc-cancelar">Cancelar</button><button id="sc-borrar">Borrar</button></div>
+          <div class="oc-msg" id="oc-msg2"></div></div>`;
         document.body.appendChild(cont);
-        let ent = [];
-        const sl = () => cont.querySelectorAll("#oc-slots2 .slot");
-        const px = () => sl().forEach((s, i) => { if (ent[i] != null) { s.textContent = TRIOS[ent[i]]; s.classList.add("lleno"); s.style.fontSize = "13px"; } else { s.textContent = ""; s.classList.remove("lleno"); } });
-        cont.querySelector("#oc-pad").addEventListener("click", (e) => {
-          const b = e.target.closest("button[data-d]"); if (!b || ent.length >= 3) return;
-          ent.push(Number(b.dataset.d)); px();
-          if (ent.length === 3) setTimeout(() => {
-            if (ent.join("") === c.acct) { cont.remove(); resolve(true); }
-            else { cont.querySelector("#oc-msg").textContent = "Subclave incorrecta."; cont.classList.add("err"); setTimeout(() => cont.classList.remove("err"), 400); ent = []; px(); }
-          }, 150);
-        });
-        cont.querySelector("#sc-borrar").addEventListener("click", () => { ent = []; px(); });
+        let tec;
+        function alCompletar(code) {
+          if (code === c.acct) { cont.remove(); resolve(true); }
+          else {
+            cont.querySelector("#oc-msg2").textContent = "Subclave incorrecta.";
+            cont.classList.add("err"); setTimeout(() => cont.classList.remove("err"), 400);
+            tec = montarTeclado(cont.querySelector("#oc-pad2"), cont.querySelector("#oc-slots2"), alCompletar); // re-baraja
+          }
+        }
+        tec = montarTeclado(cont.querySelector("#oc-pad2"), cont.querySelector("#oc-slots2"), alCompletar);
+        cont.querySelector("#sc-borrar").addEventListener("click", () => tec.reset());
         cont.querySelector("#sc-cancelar").addEventListener("click", () => { cont.remove(); resolve(false); });
       });
     },
@@ -1580,7 +1646,7 @@ async function cargarAvanzado(){
       <p style="font-size:14px;color:var(--ink-soft);margin-top:0;">Correo del dueño para recuperar las claves. Una vez guardado se oculta y queda ofuscado.</p>
       <div id="oc-email-row"></div>
       <div style="margin-top:18px;">
-        <p style="font-size:14px;color:var(--ink-soft);">Claves (PIN de 3 emojis). Cambia los códigos si lo necesitas; usa dígitos 0-9, cada dígito es un trío de emojis.</p>
+        <p style="font-size:14px;color:var(--ink-soft);">Claves (PIN de 3 dígitos). Cambia los códigos si lo necesitas; usa dígitos 0-9.</p>
         <div style="display:flex;flex-direction:column;gap:8px;max-width:340px;">
           <label style="font-size:13px;">Dueño <input id="oc-c-owner" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
           <label style="font-size:13px;">Empleado <input id="oc-c-emp" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
@@ -1588,13 +1654,11 @@ async function cargarAvanzado(){
         </div>
         <button id="oc-save-codes" class="ir" style="margin-top:12px;background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">Guardar claves</button>
         <p id="oc-codes-msg" style="font-size:14px;margin-top:8px;"></p>
-        <p style="font-size:13px;color:var(--ink-soft);">Referencia de dígitos → emojis: <span id="oc-leyenda"></span></p>
       </div>`;
     vista.appendChild(gestion);
 
     pintarEmail();
     pintarCodigos();
-    pintarLeyenda();
 
     $("oc-save-codes").addEventListener("click", () => {
       const c = window.OCAuth.cfg();
@@ -1605,11 +1669,6 @@ async function cargarAvanzado(){
       window.OCAuth.guardar(c);
       msg("oc-codes-msg", "Claves guardadas.", "var(--verde)");
     });
-  }
-
-  function pintarLeyenda() {
-    const T = window.OCAuth.TRIOS;
-    $("oc-leyenda").innerHTML = Object.keys(T).map((d) => `${d}=${T[d]}`).join("  ·  ");
   }
 
   function pintarCodigos() {

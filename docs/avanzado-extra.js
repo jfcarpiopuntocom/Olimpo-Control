@@ -66,7 +66,7 @@
       <p style="font-size:14px;color:var(--ink-soft);margin-top:0;">Correo del dueño para recuperar las claves. Una vez guardado se oculta y queda ofuscado.</p>
       <div id="oc-email-row"></div>
       <div style="margin-top:18px;">
-        <p style="font-size:14px;color:var(--ink-soft);">Claves (PIN de 3 emojis). Cambia los códigos si lo necesitas; usa dígitos 0-9, cada dígito es un trío de emojis.</p>
+        <p style="font-size:14px;color:var(--ink-soft);">Claves (PIN de 3 dígitos). Cambia los códigos si lo necesitas; usa dígitos 0-9.</p>
         <div style="display:flex;flex-direction:column;gap:8px;max-width:340px;">
           <label style="font-size:13px;">Dueño <input id="oc-c-owner" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
           <label style="font-size:13px;">Empleado <input id="oc-c-emp" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
@@ -74,13 +74,11 @@
         </div>
         <button id="oc-save-codes" class="ir" style="margin-top:12px;background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">Guardar claves</button>
         <p id="oc-codes-msg" style="font-size:14px;margin-top:8px;"></p>
-        <p style="font-size:13px;color:var(--ink-soft);">Referencia de dígitos → emojis: <span id="oc-leyenda"></span></p>
       </div>`;
     vista.appendChild(gestion);
 
     pintarEmail();
     pintarCodigos();
-    pintarLeyenda();
 
     $("oc-save-codes").addEventListener("click", () => {
       const c = window.OCAuth.cfg();
@@ -91,11 +89,6 @@
       window.OCAuth.guardar(c);
       msg("oc-codes-msg", "Claves guardadas.", "var(--verde)");
     });
-  }
-
-  function pintarLeyenda() {
-    const T = window.OCAuth.TRIOS;
-    $("oc-leyenda").innerHTML = Object.keys(T).map((d) => `${d}=${T[d]}`).join("  ·  ");
   }
 
   function pintarCodigos() {

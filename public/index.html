@@ -659,7 +659,15 @@
       <div class="sub">Tu negocio, en colores</div>
     </div>
   </div>
-  <div class="selector-ubicacion">
+  <!--
+    UBICACIONES — DORMANT (desactivado por pedido de JFC, 2026-06-30, "hasta nuevo aviso").
+    NO BORRAR. El selector se oculta con style="display:none" y queda con su valor por
+    defecto "todas", así toda la app sigue funcionando como una sola ubicación. El backend,
+    el seed y la lógica de filtrado por ubicación siguen intactos en server.js/data.js.
+    Para REACTIVAR: quitar el style="display:none" de abajo (y nada más). No se eliminó
+    código para no romper nada ni hacer cambios no autorizados fuera de este alcance.
+  -->
+  <div class="selector-ubicacion" style="display:none">
     <select id="selectUbicacion"></select>
   </div>
 </header>
