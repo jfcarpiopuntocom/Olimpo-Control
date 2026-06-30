@@ -213,15 +213,22 @@ app.post("/api/configuracion/gastos", asyncRoute(async (req, res) => {
   const { ubicacionId, gastosMensuales } = req.body;
   const monto = Number(gastosMensuales);
 
-  if (!ubicacionId || ubicacionId === "todas") {
-    return res.status(400).json({ error: "Elige una ubicación específica para guardar sus gastos mensuales." });
+  if (!ubicacionId) {
+    return res.status(400).json({ error: "Falta la ubicación." });
   }
   if (!Number.isFinite(monto) || monto < 0) {
     return res.status(400).json({ error: "El monto de gastos mensuales debe ser un número igual o mayor a 0." });
   }
-  const ubicaciones = await data.getUbicaciones();
-  if (!ubicaciones.find((u) => u.id === ubicacionId)) {
-    return res.status(404).json({ error: "Ubicación no encontrada." });
+  // "todas" es válido aquí: el selector de ubicaciones está DORMANT en Olimpo
+  // (ver index.html, comentario "UBICACIONES — DORMANT"), así que el negocio
+  // opera como una sola tienda virtual bajo la clave "todas". Si se reactiva
+  // el multi-ubicación, esta excepción sigue funcionando igual para clientes
+  // de una sola tienda — no hace falta revertir nada aquí.
+  if (ubicacionId !== "todas") {
+    const ubicaciones = await data.getUbicaciones();
+    if (!ubicaciones.find((u) => u.id === ubicacionId)) {
+      return res.status(404).json({ error: "Ubicación no encontrada." });
+    }
   }
 
   data.setGastosMensuales(ubicacionId, monto);

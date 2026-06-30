@@ -134,7 +134,10 @@
       }
       if (path === "/api/configuracion/gastos") {
         const { ubicacionId, gastosMensuales: g } = body; const monto = Number(g);
-        if (!ubicacionId || ubicacionId === "todas") return J({ error: "Elige una ubicación específica para guardar sus gastos mensuales." }, 400);
+        // "todas" es válido: ubicaciones está DORMANT en Olimpo (selector oculto,
+        // siempre vale "todas"), así que el negocio opera como una sola tienda
+        // virtual bajo esa clave. Ver la misma nota en server.js.
+        if (!ubicacionId) return J({ error: "Falta la ubicación." }, 400);
         if (!isFinite(monto) || monto < 0) return J({ error: "El monto debe ser un número igual o mayor a 0." }, 400);
         gastosMensuales[ubicacionId] = +monto.toFixed(2);
         return J({ ubicacionId, gastosMensuales: gastosMensuales[ubicacionId] });

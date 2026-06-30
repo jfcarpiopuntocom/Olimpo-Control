@@ -1069,14 +1069,15 @@ async function cargarGastosMensuales(){
   const data = await res.json();
   input.value = data.gastosMensuales;
 
-  if (ubicacionActual === "todas"){
-    input.disabled = true;
-    btn.disabled = true;
-    msg.textContent = "Elige una ubicación específica arriba para editar sus gastos mensuales. Este número es la suma de todas.";
-  } else {
-    input.disabled = false;
-    btn.disabled = false;
-  }
+  // UBICACIONES — DORMANT en Olimpo (ver header): ubicacionActual siempre es
+  // "todas", que aquí se trata como la única tienda virtual del negocio. Por
+  // eso ya NO se deshabilita el input cuando vale "todas" — antes esta
+  // condición bloqueaba la caja de gastos para siempre, porque nunca podía
+  // valer otra cosa. Si se reactiva multi-ubicación, este bloqueo vuelve a
+  // tener sentido (un total "todas" no se puede editar directo, hay que
+  // sumarlo desde cada tienda) y habría que restaurarlo.
+  input.disabled = false;
+  btn.disabled = false;
 }
 
 document.getElementById("btnGuardarGastos").addEventListener("click", async () => {
