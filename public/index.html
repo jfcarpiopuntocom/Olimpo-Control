@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Olimpo Control 1.0</title>
+<style>
+  :root{
+    --crema:#faf3e6;
+    --blanco-calido:#fffdf8;
+    --azul-oscuro:#10233f;
+    --azul-medio:#1f3a5f;
+    --dorado:#c9952c;
+    --ambar:#d98a1f;
+    --negro:#1a140c;
+    --verde:#1f6e3f;
+    --verde-claro:#e6f2e8;
+    --amarillo:#b8860b;
+    --amarillo-claro:#fdf0d0;
+    --rojo:#a8331f;
+    --rojo-claro:#fbe3dd;
+    --azul-op:#1f4f8f;
+    --azul-op-claro:#dfeaf9;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: Georgia, "Times New Roman", serif;
+    background:var(--crema);
+    color:var(--negro);
+  }
+  header{
+    background:var(--azul-oscuro);
+    color:var(--blanco-calido);
+    padding:22px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:14px;
+  }
+  header h1{
+    margin:0;
+    font-size:26px;
+    letter-spacing:0.5px;
+  }
+  header .sub{
+    font-family: -apple-system, sans-serif;
+    font-size:14px;
+    color:var(--dorado);
+    margin-top:4px;
+  }
+  .selector-ubicacion select{
+    font-size:16px;
+    padding:10px 14px;
+    border-radius:10px;
+    border:2px solid var(--dorado);
+    background:var(--blanco-calido);
+    color:var(--azul-oscuro);
+    font-family:-apple-system, sans-serif;
+  }
+  nav{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    background:var(--azul-medio);
+    padding:10px 24px;
+  }
+  nav button{
+    font-family:-apple-system, sans-serif;
+    font-size:16px;
+    padding:10px 18px;
+    border-radius:10px;
+    border:none;
+    background:var(--azul-medio);
+    color:var(--blanco-calido);
+    cursor:pointer;
+    font-weight:600;
+  }
+  nav button.activo{
+    background:var(--dorado);
+    color:var(--azul-oscuro);
+  }
+  main{
+    padding:24px;
+    max-width:1100px;
+    margin:0 auto;
+  }
+  .vista{display:none;}
+  .vista.activa{display:block;}
+
+  .hero-semaforo{
+    border-radius:18px;
+    padding:28px;
+    margin-bottom:20px;
+    color:var(--blanco-calido);
+  }
+  .hero-semaforo.verde{background:var(--verde);}
+  .hero-semaforo.amarillo{background:#9a6d0c;}
+  .hero-semaforo.rojo{background:var(--rojo);}
+  .hero-semaforo h2{
+    margin:0 0 6px 0;
+    font-size:34px;
+  }
+  .hero-semaforo p{
+    font-family:-apple-system, sans-serif;
+    font-size:18px;
+    margin:0;
+  }
+
+  .grid-resumen{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:16px;
+    margin-bottom:24px;
+  }
+  .tarjeta{
+    background:var(--blanco-calido);
+    border:2px solid var(--dorado);
+    border-radius:14px;
+    padding:18px;
+  }
+  .tarjeta .etiqueta{
+    font-family:-apple-system, sans-serif;
+    font-size:14px;
+    color:var(--azul-medio);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+  .tarjeta .valor{
+    font-size:28px;
+    font-weight:bold;
+    color:var(--azul-oscuro);
+    margin-top:6px;
+  }
+
+  h3.seccion{
+    font-size:22px;
+    color:var(--azul-oscuro);
+    border-bottom:3px solid var(--dorado);
+    padding-bottom:8px;
+    margin-top:30px;
+  }
+
+  .lista-alertas{
+    list-style:none;
+    padding:0;
+    margin:0;
+  }
+  .lista-alertas li{
+    font-family:-apple-system, sans-serif;
+    font-size:16px;
+    padding:14px 16px;
+    border-radius:10px;
+    margin-bottom:10px;
+    font-weight:600;
+  }
+  .lista-alertas li.rojo{background:var(--rojo-claro); color:var(--rojo); border:2px solid var(--rojo);}
+  .lista-alertas li.amarillo{background:var(--amarillo-claro); color:var(--amarillo); border:2px solid var(--amarillo);}
+
+  .grid-cajas{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+    gap:16px;
+  }
+  .caja{
+    border-radius:14px;
+    padding:16px;
+    border:3px solid transparent;
+    cursor:pointer;
+  }
+  .caja.verde{background:var(--verde-claro); border-color:var(--verde);}
+  .caja.amarillo{background:var(--amarillo-claro); border-color:var(--amarillo);}
+  .caja.rojo{background:var(--rojo-claro); border-color:var(--rojo);}
+  .caja.azul{background:var(--azul-op-claro); border-color:var(--azul-op);}
+  .caja .nombre{
+    font-size:18px;
+    font-weight:bold;
+    color:var(--azul-oscuro);
+  }
+  .caja .detalle{
+    font-family:-apple-system, sans-serif;
+    font-size:14px;
+    margin-top:6px;
+    color:var(--negro);
+  }
+  .caja .stock{
+    font-size:30px;
+    font-weight:bold;
+    margin-top:8px;
+  }
+  .caja.verde .stock{color:var(--verde);}
+  .caja.amarillo .stock{color:var(--amarillo);}
+  .caja.rojo .stock{color:var(--rojo);}
+  .caja.azul .stock{color:var(--azul-op);}
+
+  .filtros-estado{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-bottom:16px;
+    font-family:-apple-system, sans-serif;
+  }
+  .filtros-estado button{
+    padding:8px 16px;
+    border-radius:20px;
+    border:2px solid var(--azul-medio);
+    background:var(--blanco-calido);
+    color:var(--azul-medio);
+    font-weight:600;
+    cursor:pointer;
+    font-size:14px;
+  }
+  .filtros-estado button.activo{
+    background:var(--azul-medio);
+    color:var(--blanco-calido);
+  }
+
+  .panel-escaner{
+    background:var(--blanco-calido);
+    border:2px solid var(--dorado);
+    border-radius:14px;
+    padding:24px;
+    text-align:center;
+  }
+  .panel-escaner input{
+    font-size:22px;
+    padding:14px 18px;
+    width:100%;
+    max-width:420px;
+    border-radius:10px;
+    border:2px solid var(--azul-medio);
+    font-family: monospace;
+    text-align:center;
+  }
+  .panel-escaner button.ir{
+    font-size:18px;
+    padding:14px 26px;
+    margin-top:14px;
+    border-radius:10px;
+    border:none;
+    background:var(--dorado);
+    color:var(--azul-oscuro);
+    font-weight:bold;
+    cursor:pointer;
+    font-family:-apple-system, sans-serif;
+  }
+  .ficha-resultado{
+    margin-top:24px;
+    text-align:left;
+  }
+
+  .ficha-producto{
+    background:var(--blanco-calido);
+    border:3px solid var(--dorado);
+    border-radius:16px;
+    padding:22px;
+  }
+  .ficha-producto .titulo{
+    font-size:24px;
+    font-weight:bold;
+    color:var(--azul-oscuro);
+  }
+  .ficha-producto .precio{
+    font-size:30px;
+    color:var(--ambar);
+    font-weight:bold;
+    margin:8px 0;
+  }
+  .ficha-producto .linea{
+    font-family:-apple-system, sans-serif;
+    font-size:16px;
+    margin:4px 0;
+  }
+  .badge-estado{
+    display:inline-block;
+    font-family:-apple-system, sans-serif;
+    font-size:14px;
+    font-weight:bold;
+    padding:6px 14px;
+    border-radius:20px;
+    margin-top:8px;
+  }
+  .badge-estado.verde{background:var(--verde-claro); color:var(--verde);}
+  .badge-estado.amarillo{background:var(--amarillo-claro); color:var(--amarillo);}
+  .badge-estado.rojo{background:var(--rojo-claro); color:var(--rojo);}
+  .badge-estado.azul{background:var(--azul-op-claro); color:var(--azul-op);}
+
+  .acciones-rapidas{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:16px;
+  }
+  .acciones-rapidas button{
+    font-family:-apple-system, sans-serif;
+    font-size:15px;
+    padding:10px 16px;
+    border-radius:10px;
+    border:2px solid var(--azul-medio);
+    background:var(--blanco-calido);
+    color:var(--azul-medio);
+    font-weight:bold;
+    cursor:pointer;
+  }
+  .acciones-rapidas button.vender{background:var(--verde); color:var(--blanco-calido); border-color:var(--verde);}
+  .acciones-rapidas button.etiqueta{background:var(--dorado); color:var(--azul-oscuro); border-color:var(--dorado);}
+
+  .grid-etiquetas{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:18px;
+  }
+  .etiqueta-card{
+    background:var(--blanco-calido);
+    border:2px dashed var(--azul-medio);
+    border-radius:12px;
+    padding:16px;
+    text-align:center;
+    cursor:pointer;
+  }
+  .etiqueta-card .nombre-prod{
+    font-weight:bold;
+    font-size:16px;
+    color:var(--azul-oscuro);
+  }
+  .etiqueta-card .precio-prod{
+    color:var(--ambar);
+    font-weight:bold;
+    font-size:20px;
+    margin:4px 0;
+  }
+
+  .modal-fondo{
+    display:none;
+    position:fixed;
+    top:0;left:0;right:0;bottom:0;
+    background:var(--azul-oscuro);
+    z-index:50;
+    overflow:auto;
+    padding:20px;
+  }
+  .modal-fondo.activo{display:flex; align-items:center; justify-content:center;}
+  .etiqueta-imprimible{
+    background:var(--blanco-calido);
+    border-radius:18px;
+    padding:30px;
+    width:340px;
+    text-align:center;
+    position:relative;
+  }
+  .etiqueta-imprimible .cerrar{
+    position:absolute;
+    top:10px; right:14px;
+    font-size:24px;
+    cursor:pointer;
+    color:var(--azul-medio);
+    background:none;
+    border:none;
+    font-family:-apple-system, sans-serif;
+  }
+  .etiqueta-imprimible h4{
+    font-size:22px;
+    color:var(--azul-oscuro);
+    margin:10px 0 4px 0;
+  }
+  .etiqueta-imprimible .precio-grande{
+    font-size:36px;
+    color:var(--ambar);
+    font-weight:bold;
+    margin:8px 0;
+  }
+  .etiqueta-imprimible img{
+    margin:14px 0;
+  }
+  .etiqueta-imprimible .codigo{
+    font-family:monospace;
+    font-size:16px;
+    letter-spacing:2px;
+    color:var(--negro);
+  }
+  .etiqueta-imprimible .barras{
+    height:50px;
+    margin:10px 0;
+    background-image: repeating-linear-gradient(90deg, var(--negro) 0 3px, transparent 3px 6px);
+  }
+  .etiqueta-imprimible button.imprimir{
+    margin-top:16px;
+    font-family:-apple-system, sans-serif;
+    font-size:16px;
+    padding:10px 20px;
+    border-radius:10px;
+    border:none;
+    background:var(--azul-medio);
+    color:var(--blanco-calido);
+    cursor:pointer;
+    font-weight:bold;
+  }
+
+  .avanzado-aviso{
+    font-family:-apple-system, sans-serif;
+    background:var(--azul-op-claro);
+    color:var(--azul-op);
+    padding:14px 18px;
+    border-radius:10px;
+    margin-bottom:18px;
+    font-size:15px;
+  }
+  table.reporte{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--blanco-calido);
+    border-radius:10px;
+    overflow:hidden;
+    font-family:-apple-system, sans-serif;
+  }
+  table.reporte th, table.reporte td{
+    text-align:left;
+    padding:10px 14px;
+    border-bottom:1px solid var(--dorado);
+    font-size:15px;
+  }
+  table.reporte th{
+    background:var(--azul-medio);
+    color:var(--blanco-calido);
+  }
+
+  .actividad-item{
+    font-family:-apple-system, sans-serif;
+    background:var(--blanco-calido);
+    border-left:5px solid var(--dorado);
+    padding:12px 16px;
+    border-radius:8px;
+    margin-bottom:10px;
+    font-size:14px;
+  }
+  .actividad-item .tipo{
+    font-weight:bold;
+    color:var(--azul-oscuro);
+    text-transform:uppercase;
+    font-size:12px;
+  }
+
+  footer{
+    text-align:center;
+    font-family:-apple-system, sans-serif;
+    font-size:13px;
+    color:var(--azul-medio);
+    padding:30px 16px;
+  }
+
+  @media (max-width:600px){
+    header h1{font-size:21px;}
+    .hero-semaforo h2{font-size:26px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Olimpo Control 1.0</h1>
+    <div class="sub">v0.9 — Tu negocio, en colores</div>
+  </div>
+  <div class="selector-ubicacion">
+    <select id="selectUbicacion"></select>
+  </div>
+</header>
+
+<nav>
+  <button data-vista="hoy" class="activo">Hoy</button>
+  <button data-vista="inventario">Inventario</button>
+  <button data-vista="escanear">Escanear</button>
+  <button data-vista="etiquetas">Etiquetas</button>
+  <button data-vista="actividad">Actividad</button>
+  <button data-vista="avanzado">Avanzado</button>
+</nav>
+
+<main>
+
+  <!-- VISTA: HOY -->
+  <section id="vista-hoy" class="vista activa">
+    <div id="heroSemaforo" class="hero-semaforo verde">
+      <h2 id="heroTitulo">Cargando tu negocio...</h2>
+      <p id="heroSubtitulo"></p>
+    </div>
+
+    <div class="grid-resumen">
+      <div class="tarjeta">
+        <div class="etiqueta">Entró hoy</div>
+        <div class="valor" id="resEntra">$0.00</div>
+      </div>
+      <div class="tarjeta">
+        <div class="etiqueta">Salió hoy</div>
+        <div class="valor" id="resSale">$0.00</div>
+      </div>
+      <div class="tarjeta">
+        <div class="etiqueta">Ganancia de hoy</div>
+        <div class="valor" id="resGanancia">$0.00</div>
+      </div>
+      <div class="tarjeta">
+        <div class="etiqueta">Tu inventario vale</div>
+        <div class="valor" id="resInventario">$0.00</div>
+      </div>
+    </div>
+
+    <h3 class="seccion">Alertas de hoy</h3>
+    <ul class="lista-alertas" id="listaAlertas"></ul>
+  </section>
+
+  <!-- VISTA: INVENTARIO -->
+  <section id="vista-inventario" class="vista">
+    <h3 class="seccion" style="margin-top:0;">Tus productos</h3>
+    <div class="filtros-estado" id="filtrosEstado">
+      <button data-estado="" class="activo">Todos</button>
+      <button data-estado="rojo">🔴 Urgente</button>
+      <button data-estado="amarillo">🟡 Revisar</button>
+      <button data-estado="verde">🟢 Sano</button>
+      <button data-estado="azul">🔵 Oportunidad</button>
+    </div>
+    <div class="grid-cajas" id="gridInventario"></div>
+  </section>
+
+  <!-- VISTA: ESCANEAR -->
+  <section id="vista-escanear" class="vista">
+    <h3 class="seccion" style="margin-top:0;">Escanear o buscar</h3>
+    <div class="panel-escaner">
+      <p style="font-family:-apple-system, sans-serif; color:var(--azul-medio); margin-top:0;">
+        Escribe o pega el código de barras / SKU. (En tablet con cámara, el lector conecta aquí mismo.)
+      </p>
+      <input id="inputEscaner" type="text" placeholder="Ej: 7501234567001 o MAR-RED-20" autocomplete="off">
+      <br>
+      <button class="ir" id="btnEscanear">Buscar</button>
+      <div class="ficha-resultado" id="fichaResultado"></div>
+    </div>
+  </section>
+
+  <!-- VISTA: ETIQUETAS -->
+  <section id="vista-etiquetas" class="vista">
+    <h3 class="seccion" style="margin-top:0;">Etiquetas listas para imprimir</h3>
+    <div class="grid-etiquetas" id="gridEtiquetas"></div>
+  </section>
+
+  <!-- VISTA: ACTIVIDAD -->
+  <section id="vista-actividad" class="vista">
+    <h3 class="seccion" style="margin-top:0;">Actividad reciente</h3>
+    <div id="listaActividad"></div>
+  </section>
+
+  <!-- VISTA: AVANZADO -->
+  <section id="vista-avanzado" class="vista">
+    <h3 class="seccion" style="margin-top:0;">Modo avanzado</h3>
+    <div class="avanzado-aviso">
+      Esta sección es para el contador, el administrador o quien quiera ver el detalle técnico. José no la necesita para operar el día a día.
+    </div>
+
+    <h3 class="seccion" style="margin-top:0;">Gastos mensuales</h3>
+    <div class="panel-escaner" style="text-align:left;">
+      <p style="font-family:-apple-system, sans-serif; color:var(--azul-medio); margin-top:0;">
+        Arriendo, luz, sueldos, internet, etc. Ingresa el total mensual de la ubicación seleccionada arriba. Se reparte entre 30 para estimar el gasto operativo del día en el P&amp;G.
+      </p>
+      <input id="inputGastosMensuales" type="number" min="0" step="0.01" placeholder="Ej: 350.00" style="text-align:left; max-width:220px;">
+      <br>
+      <button class="ir" id="btnGuardarGastos">Guardar</button>
+      <p id="msgGastos" style="font-family:-apple-system, sans-serif; font-size:14px; margin-top:10px;"></p>
+    </div>
+
+    <h3 class="seccion">Pérdidas y ganancias (hoy)</h3>
+    <table class="reporte" id="tablaPL"></table>
+
+    <h3 class="seccion">Balance simplificado</h3>
+    <table class="reporte" id="tablaBalance"></table>
+
+    <h3 class="seccion">Inventario valorizado</h3>
+    <table class="reporte" id="tablaValorizado"></table>
+  </section>
+
+</main>
+
+<footer>
+  Olimpo Control 1.0 — v0.9 — Capa visual sobre Loyverse · J. F. Carpio
+</footer>
+
+<!-- MODAL ETIQUETA -->
+<div class="modal-fondo" id="modalEtiqueta">
+  <div class="etiqueta-imprimible" id="contenidoEtiqueta">
+    <button class="cerrar" id="cerrarModal">✕</button>
+  </div>
+</div>
+
+<script>
+const API = "/api";
+let ubicaciones = [];
+let ubicacionActual = "todas";
+let filtroEstadoActual = "";
+
+function fmtMoney(n){
+  return "$" + Number(n).toFixed(2);
+}
+
+async function cargarUbicaciones(){
+  const res = await fetch(`${API}/ubicaciones`);
+  ubicaciones = await res.json();
+  const sel = document.getElementById("selectUbicacion");
+  sel.innerHTML = `<option value="todas">Todas las ubicaciones</option>` +
+    ubicaciones.map(u => `<option value="${u.id}">${u.nombre}</option>`).join("");
+  sel.addEventListener("change", () => {
+    ubicacionActual = sel.value;
+    refrescarVistaActiva();
+  });
+}
+
+function vistaActivaId(){
+  const activa = document.querySelector("nav button.activo");
+  return activa ? activa.dataset.vista : "hoy";
+}
+
+function refrescarVistaActiva(){
+  const v = vistaActivaId();
+  if (v === "hoy") cargarHoy();
+  if (v === "inventario") cargarInventario();
+  if (v === "etiquetas") cargarEtiquetas();
+  if (v === "actividad") cargarActividad();
+  if (v === "avanzado") cargarAvanzado();
+}
+
+// --- Navegación ---
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("activo"));
+    btn.classList.add("activo");
+    document.querySelectorAll(".vista").forEach(v => v.classList.remove("activa"));
+    document.getElementById(`vista-${btn.dataset.vista}`).classList.add("activa");
+    refrescarVistaActiva();
+  });
+});
+
+// --- VISTA HOY ---
+async function cargarHoy(){
+  const res = await fetch(`${API}/dashboard?ubicacionId=${ubicacionActual}`);
+  const data = await res.json();
+
+  const hero = document.getElementById("heroSemaforo");
+  hero.className = "hero-semaforo " + data.semaforoGeneral;
+  const titulos = {
+    verde: "Tu negocio está en verde hoy.",
+    amarillo: "Tu negocio está en amarillo: hay cosas que revisar.",
+    rojo: "Atención: hay alertas urgentes hoy."
+  };
+  document.getElementById("heroTitulo").textContent = titulos[data.semaforoGeneral] || "Tu negocio hoy";
+  document.getElementById("heroSubtitulo").textContent =
+    `Ganaste ${fmtMoney(data.resumenDia.gananciaHoy)} hoy, con ${data.resumenDia.ventasCount} ventas registradas.`;
+
+  document.getElementById("resEntra").textContent = fmtMoney(data.resumenDia.entra);
+  document.getElementById("resSale").textContent = fmtMoney(data.resumenDia.sale);
+  document.getElementById("resGanancia").textContent = fmtMoney(data.resumenDia.gananciaHoy);
+  document.getElementById("resInventario").textContent = fmtMoney(data.resumenDia.inventarioValorizado);
+
+  const lista = document.getElementById("listaAlertas");
+  if (data.alertas.length === 0){
+    lista.innerHTML = `<li class="verde" style="background:var(--verde-claro); color:var(--verde); border:2px solid var(--verde);">No hay alertas. Todo tranquilo.</li>`;
+  } else {
+    lista.innerHTML = data.alertas.map(a =>
+      `<li class="${a.estado}">${a.estado === "rojo" ? "🔴" : "🟡"} ${a.mensaje}</li>`
+    ).join("");
+  }
+}
+
+// --- VISTA INVENTARIO ---
+document.getElementById("filtrosEstado").addEventListener("click", (e) => {
+  if (e.target.tagName !== "BUTTON") return;
+  document.querySelectorAll("#filtrosEstado button").forEach(b => b.classList.remove("activo"));
+  e.target.classList.add("activo");
+  filtroEstadoActual = e.target.dataset.estado;
+  cargarInventario();
+});
+
+async function cargarInventario(){
+  let url = `${API}/productos?ubicacionId=${ubicacionActual}`;
+  if (filtroEstadoActual) url += `&estado=${filtroEstadoActual}`;
+  const res = await fetch(url);
+  const productos = await res.json();
+  const grid = document.getElementById("gridInventario");
+  if (productos.length === 0){
+    grid.innerHTML = `<p style="font-family:-apple-system, sans-serif;">No hay productos en este filtro.</p>`;
+    return;
+  }
+  grid.innerHTML = productos.map(p => `
+    <div class="caja ${p.estado}" onclick="abrirFichaDesdeInventario('${p.id}')">
+      <div class="nombre">${p.nombre}</div>
+      <div class="detalle">${p.categoria} · ${p.sku}</div>
+      <div class="stock">${p.stockActual}</div>
+      <div class="detalle">${p.mensaje}</div>
+    </div>
+  `).join("");
+}
+
+async function abrirFichaDesdeInventario(id){
+  document.querySelector('nav button[data-vista="escanear"]').click();
+  const res = await fetch(`${API}/productos/${id}`);
+  const p = await res.json();
+  pintarFicha(p);
+}
+
+// --- VISTA ESCANEAR ---
+async function ejecutarEscaneo(){
+  const codigo = document.getElementById("inputEscaner").value.trim();
+  const contenedor = document.getElementById("fichaResultado");
+  if (!codigo){
+    contenedor.innerHTML = "";
+    return;
+  }
+  const res = await fetch(`${API}/escanear`, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({codigo})
+  });
+  if (!res.ok){
+    const err = await res.json();
+    contenedor.innerHTML = `<p style="font-family:-apple-system, sans-serif; color:var(--rojo); font-weight:bold;">${err.error}</p>`;
+    return;
+  }
+  const p = await res.json();
+  pintarFicha(p);
+}
+
+document.getElementById("btnEscanear").addEventListener("click", ejecutarEscaneo);
+document.getElementById("inputEscaner").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") ejecutarEscaneo();
+});
+
+function pintarFicha(p){
+  const contenedor = document.getElementById("fichaResultado");
+  contenedor.innerHTML = `
+    <div class="ficha-producto">
+      <div class="titulo">${p.nombre}</div>
+      <div class="precio">${fmtMoney(p.precio)}</div>
+      <div class="linea"><strong>SKU:</strong> ${p.sku}</div>
+      <div class="linea"><strong>Código:</strong> ${p.barcode}</div>
+      <div class="linea"><strong>Proveedor:</strong> ${p.proveedor}</div>
+      <div class="linea"><strong>Stock actual:</strong> ${p.stockActual} unidades</div>
+      <span class="badge-estado ${p.estado}">${p.mensaje}</span>
+      <div class="acciones-rapidas">
+        <button class="vender" onclick="venderUno('${p.id}')">Vender 1</button>
+        <button onclick="ajustar('${p.id}', 1)">+1 stock</button>
+        <button onclick="ajustar('${p.id}', -1)">-1 stock</button>
+        <button class="etiqueta" onclick="abrirEtiqueta('${p.id}')">Ver etiqueta</button>
+      </div>
+    </div>
+  `;
+}
+
+async function venderUno(id){
+  const res = await fetch(`${API}/productos/${id}/venta`, {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({cantidad:1})
+  });
+  const data = await res.json();
+  if (!res.ok){ alert(data.error); return; }
+  pintarFicha(data.producto);
+}
+
+async function ajustar(id, delta){
+  const res = await fetch(`${API}/productos/${id}/ajustar`, {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({delta, motivo:"Ajuste manual desde panel"})
+  });
+  const data = await res.json();
+  if (!res.ok){ alert(data.error); return; }
+  pintarFicha(data);
+}
+
+// --- VISTA ETIQUETAS ---
+async function cargarEtiquetas(){
+  const res = await fetch(`${API}/productos?ubicacionId=${ubicacionActual}`);
+  const productos = await res.json();
+  const grid = document.getElementById("gridEtiquetas");
+  grid.innerHTML = productos.map(p => `
+    <div class="etiqueta-card" onclick="abrirEtiqueta('${p.id}')">
+      <div class="nombre-prod">${p.nombre}</div>
+      <div class="precio-prod">${fmtMoney(p.precio)}</div>
+      <div style="font-family:monospace; font-size:13px;">${p.sku}</div>
+    </div>
+  `).join("");
+}
+
+async function abrirEtiqueta(id){
+  const res = await fetch(`${API}/productos/${id}/etiqueta`);
+  const data = await res.json();
+  const p = data.producto;
+  document.getElementById("contenidoEtiqueta").innerHTML = `
+    <button class="cerrar" id="cerrarModal2">✕</button>
+    <h4>${p.nombre}</h4>
+    <div class="precio-grande">${fmtMoney(p.precio)}</div>
+    <div class="codigo">${p.barcode}</div>
+    <div class="barras"></div>
+    <img src="${data.qrDataUrl}" width="160" height="160" alt="QR del producto">
+    <div style="font-family:-apple-system, sans-serif; font-size:12px; color:var(--azul-medio);">Escanea para ver la ficha completa</div>
+    <br>
+    <button class="imprimir" onclick="window.print()">Imprimir</button>
+  `;
+  document.getElementById("modalEtiqueta").classList.add("activo");
+  document.getElementById("cerrarModal2").addEventListener("click", cerrarModalEtiqueta);
+}
+
+function cerrarModalEtiqueta(){
+  document.getElementById("modalEtiqueta").classList.remove("activo");
+}
+document.getElementById("cerrarModal").addEventListener("click", cerrarModalEtiqueta);
+document.getElementById("modalEtiqueta").addEventListener("click", (e) => {
+  if (e.target.id === "modalEtiqueta") cerrarModalEtiqueta();
+});
+
+// --- VISTA ACTIVIDAD ---
+async function cargarActividad(){
+  const res = await fetch(`${API}/actividad`);
+  const items = await res.json();
+  const cont = document.getElementById("listaActividad");
+  if (items.length === 0){
+    cont.innerHTML = `<p style="font-family:-apple-system, sans-serif;">Todavía no hay actividad registrada en esta sesión.</p>`;
+    return;
+  }
+  cont.innerHTML = items.map(it => `
+    <div class="actividad-item">
+      <div class="tipo">${it.tipo}</div>
+      <div>${JSON.stringify(it.detalle)}</div>
+      <div style="color:var(--azul-medio);">${new Date(it.fecha).toLocaleString()}</div>
+    </div>
+  `).join("");
+}
+
+// --- VISTA AVANZADO ---
+async function cargarGastosMensuales(){
+  const input = document.getElementById("inputGastosMensuales");
+  const msg = document.getElementById("msgGastos");
+  const btn = document.getElementById("btnGuardarGastos");
+  msg.textContent = "";
+
+  const res = await fetch(`${API}/configuracion/gastos?ubicacionId=${ubicacionActual}`);
+  const data = await res.json();
+  input.value = data.gastosMensuales;
+
+  if (ubicacionActual === "todas"){
+    input.disabled = true;
+    btn.disabled = true;
+    msg.textContent = "Elige una ubicación específica arriba para editar sus gastos mensuales. Este número es la suma de todas.";
+  } else {
+    input.disabled = false;
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("btnGuardarGastos").addEventListener("click", async () => {
+  const input = document.getElementById("inputGastosMensuales");
+  const msg = document.getElementById("msgGastos");
+  const res = await fetch(`${API}/configuracion/gastos`, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ ubicacionId: ubicacionActual, gastosMensuales: Number(input.value) })
+  });
+  const data = await res.json();
+  if (!res.ok){
+    msg.style.color = "var(--rojo)";
+    msg.textContent = data.error;
+    return;
+  }
+  msg.style.color = "var(--verde)";
+  msg.textContent = "Guardado. Actualizando el P&G...";
+  cargarAvanzado();
+});
+
+async function cargarAvanzado(){
+  await cargarGastosMensuales();
+  const [pl, balance, valorizado] = await Promise.all([
+    fetch(`${API}/reportes/pl?ubicacionId=${ubicacionActual}`).then(r => r.json()),
+    fetch(`${API}/reportes/balance?ubicacionId=${ubicacionActual}`).then(r => r.json()),
+    fetch(`${API}/reportes/valorizado?ubicacionId=${ubicacionActual}`).then(r => r.json()),
+  ]);
+
+  document.getElementById("tablaPL").innerHTML = `
+    <tr><th>Concepto</th><th>Monto</th></tr>
+    <tr><td>Ingresos</td><td>${fmtMoney(pl.ingresos)}</td></tr>
+    <tr><td>Costo de ventas</td><td>${fmtMoney(pl.costoVentas)}</td></tr>
+    <tr><td>Utilidad bruta</td><td>${fmtMoney(pl.utilidadBruta)}</td></tr>
+    <tr><td>Gastos operativos</td><td>${fmtMoney(pl.gastosOperativos)}</td></tr>
+    <tr><td><strong>Utilidad neta</strong></td><td><strong>${fmtMoney(pl.utilidadNeta)}</strong></td></tr>
+  `;
+
+  document.getElementById("tablaBalance").innerHTML = `
+    <tr><th>Concepto</th><th>Monto</th></tr>
+    <tr><td>Efectivo estimado</td><td>${fmtMoney(balance.activos.efectivoEstimado)}</td></tr>
+    <tr><td>Inventario valorizado</td><td>${fmtMoney(balance.activos.inventarioValorizado)}</td></tr>
+    <tr><td><strong>Total activos</strong></td><td><strong>${fmtMoney(balance.activos.total)}</strong></td></tr>
+  `;
+
+  document.getElementById("tablaValorizado").innerHTML = `
+    <tr><th>Producto</th><th>Stock</th><th>Valor costo</th><th>Valor venta</th><th>Utilidad potencial</th></tr>
+    ${valorizado.productos.map(p => `
+      <tr>
+        <td>${p.nombre}</td>
+        <td>${p.stockActual}</td>
+        <td>${fmtMoney(p.valorCosto)}</td>
+        <td>${fmtMoney(p.valorVenta)}</td>
+        <td>${fmtMoney(p.utilidadPotencial)}</td>
+      </tr>
+    `).join("")}
+    <tr>
+      <td><strong>Total</strong></td>
+      <td></td>
+      <td><strong>${fmtMoney(valorizado.totales.valorCosto)}</strong></td>
+      <td><strong>${fmtMoney(valorizado.totales.valorVenta)}</strong></td>
+      <td><strong>${fmtMoney(valorizado.totales.utilidadPotencial)}</strong></td>
+    </tr>
+  `;
+}
+
+// --- Init ---
+(async function init(){
+  await cargarUbicaciones();
+  cargarHoy();
+})();
+</script>
+
+</body>
+</html>
