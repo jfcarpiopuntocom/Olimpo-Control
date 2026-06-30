@@ -1,0 +1,172 @@
+// avanzado-extra.js — Reestructura la vista "Avanzado" del dueño en dos capas:
+//   1) Gestión (gastos, correo de recuperación, claves) — visible al dueño.
+//   2) Contable (cuentas T, P&G, balance, valorizado) — detrás de la SUBCLAVE.
+// Depende de window.OCAuth (auth-ui.js).
+(function () {
+  function $(id) { return document.getElementById(id); }
+  const API = "/api";
+  let desbloqueadaSesion = false;
+
+  function ubic() { const s = $("selectUbicacion"); return s ? s.value : "todas"; }
+  const money = (n) => "$" + Number(n || 0).toFixed(2);
+
+  function init() {
+    const vista = $("vista-avanzado");
+    if (!vista || vista.dataset.ocReady) return;
+    vista.dataset.ocReady = "1";
+
+    // --- Mover los bloques contables a un contenedor cerrable ---
+    const cont = document.createElement("div");
+    cont.id = "oc-contable";
+    cont.style.display = "none";
+    // T-accounts arriba
+    const tboxes = document.createElement("div");
+    tboxes.id = "oc-taccounts";
+    tboxes.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin:6px 0 22px;";
+    cont.appendChild(tboxes);
+
+    // Mover PL / balance / valorizado (h3 + tabla-wrap) al contenedor
+    const marcadores = ["tablaPL", "tablaBalance", "tablaValorizado"];
+    marcadores.forEach((idTabla) => {
+      const tabla = $(idTabla);
+      if (!tabla) return;
+      const wrap = tabla.closest(".tabla-wrap");
+      const h3 = wrap && wrap.previousElementSibling;
+      if (h3 && h3.tagName === "H3") cont.appendChild(h3);
+      if (wrap) cont.appendChild(wrap);
+    });
+
+    // --- Candado ---
+    const lock = document.createElement("div");
+    lock.id = "oc-acct-lock";
+    lock.className = "tag-card";
+    lock.innerHTML = `<p style="font-size:15px;color:var(--ink-soft);margin:0 0 14px;">
+      La capa contable (cuentas T, P&amp;G, balance e inventario valorizado) está protegida con una subclave aparte.</p>
+      <button id="oc-acct-open">🔒 Ver capa contable</button>`;
+    vista.appendChild(lock);
+    vista.appendChild(cont);
+
+    $("oc-acct-open").addEventListener("click", async () => {
+      if (!desbloqueadaSesion) {
+        const ok = await window.OCAuth.pedirSubclaveContable();
+        if (!ok) return;
+        desbloqueadaSesion = true;
+      }
+      lock.style.display = "none";
+      cont.style.display = "block";
+      await render();
+    });
+
+    // --- Panel de gestión (correo recuperación + claves) ---
+    const gestion = document.createElement("div");
+    gestion.className = "panel-escaner tag-card";
+    gestion.style.cssText = "text-align:left;margin-top:22px;";
+    gestion.innerHTML = `
+      <h3 class="seccion" style="margin-top:0;">Acceso y recuperación</h3>
+      <p style="font-size:14px;color:var(--ink-soft);margin-top:0;">Correo del dueño para recuperar las claves. Una vez guardado se oculta y queda ofuscado.</p>
+      <div id="oc-email-row"></div>
+      <div style="margin-top:18px;">
+        <p style="font-size:14px;color:var(--ink-soft);">Claves (PIN de 3 emojis). Cambia los códigos si lo necesitas; usa dígitos 0-9, cada dígito es un trío de emojis.</p>
+        <div style="display:flex;flex-direction:column;gap:8px;max-width:340px;">
+          <label style="font-size:13px;">Dueño <input id="oc-c-owner" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
+          <label style="font-size:13px;">Empleado <input id="oc-c-emp" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
+          <label style="font-size:13px;">Contable <input id="oc-c-acct" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
+        </div>
+        <button id="oc-save-codes" class="ir" style="margin-top:12px;background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">Guardar claves</button>
+        <p id="oc-codes-msg" style="font-size:14px;margin-top:8px;"></p>
+        <p style="font-size:13px;color:var(--ink-soft);">Referencia de dígitos → emojis: <span id="oc-leyenda"></span></p>
+      </div>`;
+    vista.appendChild(gestion);
+
+    pintarEmail();
+    pintarCodigos();
+    pintarLeyenda();
+
+    $("oc-save-codes").addEventListener("click", () => {
+      const c = window.OCAuth.cfg();
+      const o = $("oc-c-owner").value.trim(), e = $("oc-c-emp").value.trim(), a = $("oc-c-acct").value.trim();
+      const valido = (s) => /^[0-9]{3}$/.test(s);
+      if (![o, e, a].every(valido)) { msg("oc-codes-msg", "Cada clave debe ser 3 dígitos (0-9).", "var(--rojo)"); return; }
+      c.owner = o; c.empleados = [e]; c.acct = a;
+      window.OCAuth.guardar(c);
+      msg("oc-codes-msg", "Claves guardadas.", "var(--verde)");
+    });
+  }
+
+  function pintarLeyenda() {
+    const T = window.OCAuth.TRIOS;
+    $("oc-leyenda").innerHTML = Object.keys(T).map((d) => `${d}=${T[d]}`).join("  ·  ");
+  }
+
+  function pintarCodigos() {
+    const c = window.OCAuth.cfg();
+    $("oc-c-owner").value = c.owner;
+    $("oc-c-emp").value = (c.empleados || [])[0] || "";
+    $("oc-c-acct").value = c.acct;
+  }
+
+  function pintarEmail() {
+    const c = window.OCAuth.cfg();
+    const row = $("oc-email-row");
+    if (c.email) {
+      row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-family:var(--font-mono);font-size:15px;color:var(--ink);">${window.OCAuth.enmascarar(c.email)}</span>
+        <button id="oc-email-edit" style="font-size:13px;padding:8px 12px;border:2px solid var(--azul-medio);border-radius:5px;background:transparent;color:var(--azul-medio);cursor:pointer;">Cambiar</button></div>`;
+      $("oc-email-edit").addEventListener("click", () => { const cc = window.OCAuth.cfg(); cc.email = ""; window.OCAuth.guardar(cc); pintarEmail(); });
+    } else {
+      row.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input id="oc-email-in" type="email" placeholder="correo@dominio.com" style="flex:1;min-width:200px;padding:10px;border:2px solid var(--azul-medio);border-radius:5px;font-family:var(--font-mono);">
+        <button id="oc-email-save" class="ir" style="background:var(--rust);color:var(--blanco-calido);border-color:var(--rust-deep);">Guardar</button></div>
+        <p id="oc-email-msg" style="font-size:14px;margin-top:8px;"></p>`;
+      $("oc-email-save").addEventListener("click", () => {
+        const v = $("oc-email-in").value.trim();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { msg("oc-email-msg", "Correo no válido.", "var(--rojo)"); return; }
+        const cc = window.OCAuth.cfg(); cc.email = v; window.OCAuth.guardar(cc); pintarEmail();
+      });
+    }
+  }
+
+  function msg(id, txt, color) { const el = $(id); if (el) { el.style.color = color; el.textContent = txt; } }
+
+  async function render() {
+    const u = ubic();
+    const [pl, bal] = await Promise.all([
+      fetch(`${API}/reportes/pl?ubicacionId=${u}`).then((r) => r.json()),
+      fetch(`${API}/reportes/balance?ubicacionId=${u}`).then((r) => r.json()),
+    ]);
+    // Cuentas T derivadas del día (partida doble simplificada)
+    const cuentas = [
+      { nombre: "Caja (Activo)", debe: [["Ventas del día", pl.ingresos]], haber: [["Gastos operativos", pl.gastosOperativos]] },
+      { nombre: "Ventas (Ingreso)", debe: [], haber: [["Ingresos del día", pl.ingresos]] },
+      { nombre: "Costo de Ventas (Gasto)", debe: [["Costo de lo vendido", pl.costoVentas]], haber: [] },
+      { nombre: "Inventario (Activo)", debe: [["Saldo valorizado", bal.activos.inventarioValorizado]], haber: [["Salida por ventas", pl.costoVentas]] },
+      { nombre: "Gastos Operativos (Gasto)", debe: [["Prorrateo del día", pl.gastosOperativos]], haber: [] },
+    ];
+    $("oc-taccounts").innerHTML = cuentas.map(tAccount).join("");
+  }
+
+  function tAccount(c) {
+    const filas = Math.max(c.debe.length, c.haber.length, 1);
+    let rows = "";
+    for (let i = 0; i < filas; i++) {
+      const d = c.debe[i], h = c.haber[i];
+      rows += `<tr>
+        <td style="width:50%;padding:4px 6px;font-size:13px;border-right:1.5px solid var(--ink);">${d ? d[0] + " " + money(d[1]) : ""}</td>
+        <td style="width:50%;padding:4px 6px;font-size:13px;">${h ? h[0] + " " + money(h[1]) : ""}</td></tr>`;
+    }
+    return `<div class="tag-card" style="padding:12px;">
+      <div style="font-family:var(--font-display);font-weight:700;font-size:14px;text-align:center;color:var(--ink);border-bottom:2px solid var(--ink);padding-bottom:6px;margin-bottom:4px;">${c.nombre}</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr><th style="font-size:11px;color:var(--ink-soft);border-right:1.5px solid var(--ink);border-bottom:1px solid var(--ink);">DEBE</th><th style="font-size:11px;color:var(--ink-soft);border-bottom:1px solid var(--ink);">HABER</th></tr>
+        ${rows}
+      </table></div>`;
+  }
+
+  // Si la ubicación cambia mientras está desbloqueada, re-render
+  document.addEventListener("change", (e) => {
+    if (e.target && e.target.id === "selectUbicacion" && desbloqueadaSesion && $("oc-contable") && $("oc-contable").style.display !== "none") render();
+  });
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
