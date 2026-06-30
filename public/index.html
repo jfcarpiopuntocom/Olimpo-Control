@@ -1,193 +1,310 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
+<html lang="es"><head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Olimpo Control 1.0</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/favicon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --crema:#faf3e6;
-    --blanco-calido:#fffdf8;
-    --azul-oscuro:#10233f;
-    --azul-medio:#1f3a5f;
-    --dorado:#c9952c;
-    --ambar:#d98a1f;
-    --negro:#1a140c;
-    --verde:#1f6e3f;
-    --verde-claro:#e6f2e8;
-    --amarillo:#b8860b;
-    --amarillo-claro:#fdf0d0;
-    --rojo:#a8331f;
-    --rojo-claro:#fbe3dd;
-    --azul-op:#1f4f8f;
-    --azul-op-claro:#dfeaf9;
+    /* --- superficies y tinta (reasignadas, mismos nombres usados por el script) --- */
+    --crema:#f3e8cd;          /* papel principal */
+    --blanco-calido:#fbf5e8;  /* papel de tarjeta */
+    --azul-oscuro:#1c3049;    /* tinta-azul de cabecera */
+    --azul-medio:#2c4a68;
+    --dorado:#9c7a35;         /* laton / acento secundario */
+    --ambar:#b2461f;          /* terracota / precios */
+    --negro:#211c14;          /* tinta */
+    --verde:#2f7a4f;
+    --verde-claro:#e3efe1;
+    --amarillo:#9c6c0a;
+    --amarillo-claro:#f6ead0;
+    --rojo:#a3392a;
+    --rojo-claro:#f5e0db;
+    --azul-op:#2f5f8f;
+    --azul-op-claro:#dde9f5;
+
+    /* --- nuevas variables del sistema --- */
+    --paper-deep:#e8dbb6;
+    --ink:#211c14;
+    --ink-soft:#5d5340;
+    --rust:#b2461f;
+    --rust-deep:#7e2f12;
+    --brass:#9c7a35;
+    --font-display:"Space Grotesk", "Avenir Next Condensed", sans-serif;
+    --font-body:"Source Sans 3", "Segoe UI", sans-serif;
+    --font-mono:"JetBrains Mono", monospace;
+    --nav-h:78px;
+    --sidebar-w:248px;
+    --header-h:104px;
   }
   *{box-sizing:border-box;}
+  html{-webkit-tap-highlight-color:transparent;}
   body{
     margin:0;
-    font-family: Georgia, "Times New Roman", serif;
-    background:var(--crema);
-    color:var(--negro);
+    font-family:var(--font-body);
+    background-color:var(--crema);
+    background-image:
+      repeating-linear-gradient(to bottom, transparent 0 31px, rgba(33,28,20,0.05) 31px 32px);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
   }
+
+  /* ---------- utilidad: tarjeta-etiqueta (esquina cortada + ojal) ---------- */
+  .tag-card{
+    position:relative;
+    background:var(--blanco-calido);
+    border:1.5px solid rgba(33,28,20,0.22);
+    clip-path:polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+  }
+  .tag-card::after{
+    content:"";
+    position:absolute;
+    top:6px; right:6px;
+    width:8px; height:8px;
+    border-radius:50%;
+    background:var(--brass);
+    box-shadow:0 0 0 2px var(--blanco-calido);
+  }
+
+  /* ---------- botones tipo sello ---------- */
+  button{
+    font-family:var(--font-display);
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    border:2px solid var(--ink);
+    border-radius:5px;
+    background:var(--blanco-calido);
+    color:var(--ink);
+    box-shadow:3px 3px 0 rgba(33,28,20,0.18);
+    cursor:pointer;
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  button:active{
+    transform:translate(2px,2px);
+    box-shadow:0 0 0 rgba(33,28,20,0);
+  }
+
+  /* ================= HEADER ================= */
   header{
     background:var(--azul-oscuro);
     color:var(--blanco-calido);
-    padding:22px 24px;
+    padding:18px 20px;
+    min-height:var(--header-h);
     display:flex;
     align-items:center;
     justify-content:space-between;
     flex-wrap:wrap;
     gap:14px;
+    position:sticky;
+    top:0;
+    z-index:40;
+    border-bottom:3px solid var(--brass);
+  }
+  header .marca{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  header .sello{
+    width:42px; height:42px;
+    border-radius:50%;
+    border:2px solid var(--brass);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:17px;
+    color:var(--brass);
+    flex-shrink:0;
+    overflow:hidden;
+    object-fit:cover;
+    cursor:pointer;
+    background:var(--azul-oscuro);
   }
   header h1{
     margin:0;
-    font-size:26px;
-    letter-spacing:0.5px;
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:21px;
+    letter-spacing:0.01em;
   }
   header .sub{
-    font-family: -apple-system, sans-serif;
-    font-size:14px;
-    color:var(--dorado);
-    margin-top:4px;
+    font-family:var(--font-mono);
+    font-size:13px;
+    letter-spacing:0.04em;
+    color:var(--brass);
+    margin-top:3px;
+    text-transform:uppercase;
   }
   .selector-ubicacion select{
-    font-size:16px;
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:14px;
     padding:10px 14px;
-    border-radius:10px;
-    border:2px solid var(--dorado);
+    border-radius:5px;
+    border:2px solid var(--brass);
     background:var(--blanco-calido);
     color:var(--azul-oscuro);
-    font-family:-apple-system, sans-serif;
   }
+
+  /* ================= NAV — barra inferior en móvil, riel lateral en tablet/desktop ================= */
   nav{
     display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-    background:var(--azul-medio);
-    padding:10px 24px;
+    gap:4px;
+    background:var(--paper-deep);
+    border-top:2px solid var(--ink);
+    position:fixed;
+    left:0; right:0; bottom:0;
+    height:var(--nav-h);
+    padding:4px 6px env(safe-area-inset-bottom, 4px);
+    z-index:35;
   }
   nav button{
-    font-family:-apple-system, sans-serif;
-    font-size:16px;
-    padding:10px 18px;
-    border-radius:10px;
-    border:none;
-    background:var(--azul-medio);
-    color:var(--blanco-calido);
-    cursor:pointer;
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    font-size:13px;
     font-weight:600;
+    padding:4px 2px;
+    min-height:44px;
+    background:transparent;
+    border:none;
+    box-shadow:none;
+    color:var(--ink-soft);
+    border-radius:6px;
   }
+  nav button svg{ width:20px; height:20px; }
   nav button.activo{
-    background:var(--dorado);
-    color:var(--azul-oscuro);
+    background:var(--rust);
+    color:var(--blanco-calido);
   }
+  nav button:active{ transform:scale(0.95); }
+
   main{
-    padding:24px;
-    max-width:1100px;
+    padding:18px 16px calc(var(--nav-h) + 28px);
+    max-width:1200px;
     margin:0 auto;
   }
   .vista{display:none;}
   .vista.activa{display:block;}
 
+  /* ================= HERO SEMÁFORO ================= */
   .hero-semaforo{
-    border-radius:18px;
-    padding:28px;
-    margin-bottom:20px;
+    padding:26px 22px;
+    margin-bottom:18px;
     color:var(--blanco-calido);
+    border-color:rgba(255,255,255,0.35);
   }
-  .hero-semaforo.verde{background:var(--verde);}
-  .hero-semaforo.amarillo{background:#9a6d0c;}
+  .hero-semaforo.verde{background:var(--verde); --tc-bg:var(--verde);}
+  .hero-semaforo.amarillo{background:#8f600c;}
   .hero-semaforo.rojo{background:var(--rojo);}
   .hero-semaforo h2{
     margin:0 0 6px 0;
-    font-size:34px;
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:26px;
+    line-height:1.15;
   }
   .hero-semaforo p{
-    font-family:-apple-system, sans-serif;
-    font-size:18px;
+    font-size:16px;
     margin:0;
+    color:var(--blanco-calido);
   }
 
+  /* ================= TARJETAS RESUMEN ================= */
   .grid-resumen{
     display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-    gap:16px;
-    margin-bottom:24px;
+    grid-template-columns:repeat(2,1fr);
+    gap:12px;
+    margin-bottom:22px;
   }
   .tarjeta{
-    background:var(--blanco-calido);
-    border:2px solid var(--dorado);
-    border-radius:14px;
-    padding:18px;
+    padding:14px 16px;
   }
   .tarjeta .etiqueta{
-    font-family:-apple-system, sans-serif;
-    font-size:14px;
-    color:var(--azul-medio);
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--ink-soft);
     text-transform:uppercase;
-    letter-spacing:0.5px;
+    letter-spacing:0.06em;
   }
   .tarjeta .valor{
-    font-size:28px;
-    font-weight:bold;
-    color:var(--azul-oscuro);
-    margin-top:6px;
+    font-family:var(--font-display);
+    font-size:24px;
+    font-weight:700;
+    color:var(--ink);
+    margin-top:5px;
   }
 
   h3.seccion{
-    font-size:22px;
-    color:var(--azul-oscuro);
-    border-bottom:3px solid var(--dorado);
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:18px;
+    color:var(--ink);
+    border-bottom:3px solid var(--brass);
     padding-bottom:8px;
-    margin-top:30px;
+    margin-top:28px;
   }
 
+  /* ================= ALERTAS ================= */
   .lista-alertas{
     list-style:none;
     padding:0;
     margin:0;
   }
   .lista-alertas li{
-    font-family:-apple-system, sans-serif;
-    font-size:16px;
-    padding:14px 16px;
-    border-radius:10px;
-    margin-bottom:10px;
+    font-size:15px;
+    padding:13px 14px;
+    border-radius:5px;
+    margin-bottom:9px;
     font-weight:600;
+    display:flex;
+    align-items:center;
   }
   .lista-alertas li.rojo{background:var(--rojo-claro); color:var(--rojo); border:2px solid var(--rojo);}
   .lista-alertas li.amarillo{background:var(--amarillo-claro); color:var(--amarillo); border:2px solid var(--amarillo);}
 
+  /* ================= INVENTARIO ================= */
   .grid-cajas{
     display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
-    gap:16px;
+    grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+    gap:14px;
   }
   .caja{
-    border-radius:14px;
-    padding:16px;
-    border:3px solid transparent;
+    padding:15px;
+    border:2px solid transparent;
     cursor:pointer;
+    min-height:44px;
   }
   .caja.verde{background:var(--verde-claro); border-color:var(--verde);}
   .caja.amarillo{background:var(--amarillo-claro); border-color:var(--amarillo);}
   .caja.rojo{background:var(--rojo-claro); border-color:var(--rojo);}
   .caja.azul{background:var(--azul-op-claro); border-color:var(--azul-op);}
   .caja .nombre{
-    font-size:18px;
-    font-weight:bold;
-    color:var(--azul-oscuro);
+    font-family:var(--font-display);
+    font-size:16px;
+    font-weight:700;
+    color:var(--ink);
   }
   .caja .detalle{
-    font-family:-apple-system, sans-serif;
-    font-size:14px;
-    margin-top:6px;
-    color:var(--negro);
+    font-size:13px;
+    margin-top:5px;
+    color:var(--ink-soft);
   }
   .caja .stock{
-    font-size:30px;
-    font-weight:bold;
-    margin-top:8px;
+    font-family:var(--font-display);
+    font-size:28px;
+    font-weight:700;
+    margin-top:6px;
   }
   .caja.verde .stock{color:var(--verde);}
   .caja.amarillo .stock{color:var(--amarillo);}
@@ -199,85 +316,104 @@
     gap:8px;
     flex-wrap:wrap;
     margin-bottom:16px;
-    font-family:-apple-system, sans-serif;
   }
   .filtros-estado button{
-    padding:8px 16px;
+    padding:9px 14px 9px 28px;
     border-radius:20px;
     border:2px solid var(--azul-medio);
     background:var(--blanco-calido);
     color:var(--azul-medio);
     font-weight:600;
-    cursor:pointer;
-    font-size:14px;
+    font-size:13px;
+    box-shadow:none;
+    min-height:40px;
+    position:relative;
   }
+  .filtros-estado button::before{
+    content:"";
+    position:absolute;
+    left:12px; top:50%;
+    width:8px; height:8px;
+    border-radius:50%;
+    transform:translateY(-50%);
+    background:var(--ink-soft);
+  }
+  .filtros-estado button[data-estado="rojo"]::before{background:var(--rojo);}
+  .filtros-estado button[data-estado="amarillo"]::before{background:var(--amarillo);}
+  .filtros-estado button[data-estado="verde"]::before{background:var(--verde);}
+  .filtros-estado button[data-estado="azul"]::before{background:var(--azul-op);}
+  .filtros-estado button[data-estado=""]{padding-left:14px;}
   .filtros-estado button.activo{
     background:var(--azul-medio);
     color:var(--blanco-calido);
   }
 
+  /* ================= ESCANEAR ================= */
   .panel-escaner{
-    background:var(--blanco-calido);
-    border:2px solid var(--dorado);
-    border-radius:14px;
-    padding:24px;
+    padding:26px 20px;
     text-align:center;
+  }
+  .panel-escaner p{
+    font-size:14px;
+    color:var(--ink-soft);
+    margin-top:0;
   }
   .panel-escaner input{
-    font-size:22px;
-    padding:14px 18px;
+    font-size:18px;
+    padding:14px 16px;
     width:100%;
     max-width:420px;
-    border-radius:10px;
+    border-radius:5px;
     border:2px solid var(--azul-medio);
-    font-family: monospace;
+    font-family:var(--font-mono);
     text-align:center;
+    background:var(--crema);
+    color:var(--ink);
   }
   .panel-escaner button.ir{
-    font-size:18px;
-    padding:14px 26px;
+    font-size:15px;
+    padding:14px 24px;
     margin-top:14px;
-    border-radius:10px;
-    border:none;
-    background:var(--dorado);
-    color:var(--azul-oscuro);
-    font-weight:bold;
-    cursor:pointer;
-    font-family:-apple-system, sans-serif;
+    background:var(--rust);
+    color:var(--blanco-calido);
+    border-color:var(--rust-deep);
+    min-height:48px;
   }
   .ficha-resultado{
-    margin-top:24px;
+    margin-top:22px;
     text-align:left;
   }
 
   .ficha-producto{
-    background:var(--blanco-calido);
-    border:3px solid var(--dorado);
-    border-radius:16px;
-    padding:22px;
+    padding:20px;
   }
   .ficha-producto .titulo{
-    font-size:24px;
-    font-weight:bold;
-    color:var(--azul-oscuro);
+    font-family:var(--font-display);
+    font-size:20px;
+    font-weight:700;
+    color:var(--ink);
   }
   .ficha-producto .precio{
-    font-size:30px;
+    font-family:var(--font-display);
+    font-size:28px;
     color:var(--ambar);
-    font-weight:bold;
-    margin:8px 0;
+    font-weight:700;
+    margin:6px 0;
   }
   .ficha-producto .linea{
-    font-family:-apple-system, sans-serif;
-    font-size:16px;
+    font-size:15px;
     margin:4px 0;
+    color:var(--ink-soft);
   }
+  .ficha-producto .linea strong{ color:var(--ink); }
   .badge-estado{
     display:inline-block;
-    font-family:-apple-system, sans-serif;
-    font-size:14px;
-    font-weight:bold;
-    padding:6px 14px;
+    font-family:var(--font-display);
+    font-size:13px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+    padding:6px 13px;
     border-radius:20px;
     margin-top:8px;
   }
@@ -293,49 +429,53 @@
     margin-top:16px;
   }
   .acciones-rapidas button{
-    font-family:-apple-system, sans-serif;
-    font-size:15px;
-    padding:10px 16px;
-    border-radius:10px;
-    border:2px solid var(--azul-medio);
-    background:var(--blanco-calido);
+    font-size:13px;
+    padding:11px 15px;
+    border-color:var(--azul-medio);
     color:var(--azul-medio);
-    font-weight:bold;
-    cursor:pointer;
+    min-height:44px;
   }
   .acciones-rapidas button.vender{background:var(--verde); color:var(--blanco-calido); border-color:var(--verde);}
-  .acciones-rapidas button.etiqueta{background:var(--dorado); color:var(--azul-oscuro); border-color:var(--dorado);}
+  .acciones-rapidas button.etiqueta{background:var(--brass); color:var(--blanco-calido); border-color:var(--brass);}
 
+  /* ================= ETIQUETAS ================= */
   .grid-etiquetas{
     display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
-    gap:18px;
+    grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+    gap:16px;
   }
   .etiqueta-card{
-    background:var(--blanco-calido);
-    border:2px dashed var(--azul-medio);
-    border-radius:12px;
     padding:16px;
     text-align:center;
     cursor:pointer;
+    border-style:dashed;
+    min-height:44px;
   }
   .etiqueta-card .nombre-prod{
-    font-weight:bold;
-    font-size:16px;
-    color:var(--azul-oscuro);
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:14px;
+    color:var(--ink);
   }
   .etiqueta-card .precio-prod{
     color:var(--ambar);
-    font-weight:bold;
-    font-size:20px;
-    margin:4px 0;
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:19px;
+    margin:5px 0;
+  }
+  .etiqueta-card .sku-prod{
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--ink-soft);
   }
 
+  /* ================= MODAL ETIQUETA ================= */
   .modal-fondo{
     display:none;
     position:fixed;
     top:0;left:0;right:0;bottom:0;
-    background:var(--azul-oscuro);
+    background:rgba(28,48,73,0.82);
     z-index:50;
     overflow:auto;
     padding:20px;
@@ -343,124 +483,181 @@
   .modal-fondo.activo{display:flex; align-items:center; justify-content:center;}
   .etiqueta-imprimible{
     background:var(--blanco-calido);
-    border-radius:18px;
     padding:30px;
     width:340px;
+    max-width:100%;
     text-align:center;
     position:relative;
   }
   .etiqueta-imprimible .cerrar{
     position:absolute;
-    top:10px; right:14px;
-    font-size:24px;
+    top:8px; left:10px;
+    font-size:20px;
     cursor:pointer;
-    color:var(--azul-medio);
+    color:var(--ink-soft);
     background:none;
     border:none;
-    font-family:-apple-system, sans-serif;
+    box-shadow:none;
+    font-family:var(--font-body);
+    width:34px; height:34px;
   }
   .etiqueta-imprimible h4{
-    font-size:22px;
-    color:var(--azul-oscuro);
-    margin:10px 0 4px 0;
+    font-family:var(--font-display);
+    font-size:20px;
+    color:var(--ink);
+    margin:14px 0 4px 0;
   }
   .etiqueta-imprimible .precio-grande{
-    font-size:36px;
+    font-family:var(--font-display);
+    font-size:34px;
     color:var(--ambar);
-    font-weight:bold;
+    font-weight:700;
     margin:8px 0;
   }
   .etiqueta-imprimible img{
     margin:14px 0;
   }
   .etiqueta-imprimible .codigo{
-    font-family:monospace;
-    font-size:16px;
+    font-family:var(--font-mono);
+    font-size:15px;
     letter-spacing:2px;
-    color:var(--negro);
+    color:var(--ink);
   }
   .etiqueta-imprimible .barras{
-    height:50px;
+    height:46px;
     margin:10px 0;
-    background-image: repeating-linear-gradient(90deg, var(--negro) 0 3px, transparent 3px 6px);
+    background-image: repeating-linear-gradient(90deg, var(--ink) 0 3px, transparent 3px 6px);
   }
   .etiqueta-imprimible button.imprimir{
-    margin-top:16px;
-    font-family:-apple-system, sans-serif;
-    font-size:16px;
-    padding:10px 20px;
-    border-radius:10px;
-    border:none;
+    margin-top:14px;
+    font-size:14px;
+    padding:11px 20px;
     background:var(--azul-medio);
     color:var(--blanco-calido);
-    cursor:pointer;
-    font-weight:bold;
+    border-color:var(--azul-oscuro);
+    min-height:44px;
   }
 
+  /* ================= AVANZADO ================= */
   .avanzado-aviso{
-    font-family:-apple-system, sans-serif;
     background:var(--azul-op-claro);
     color:var(--azul-op);
-    padding:14px 18px;
-    border-radius:10px;
+    padding:14px 16px;
+    border-radius:5px;
     margin-bottom:18px;
-    font-size:15px;
+    font-size:14px;
+    border-left:none;
   }
+  .tabla-wrap{ overflow-x:auto; }
   table.reporte{
     width:100%;
+    min-width:420px;
     border-collapse:collapse;
     background:var(--blanco-calido);
-    border-radius:10px;
-    overflow:hidden;
-    font-family:-apple-system, sans-serif;
+    border:1.5px solid rgba(33,28,20,0.22);
   }
   table.reporte th, table.reporte td{
     text-align:left;
-    padding:10px 14px;
-    border-bottom:1px solid var(--dorado);
-    font-size:15px;
+    padding:11px 13px;
+    border-bottom:1px solid rgba(33,28,20,0.15);
+    font-size:14px;
   }
   table.reporte th{
     background:var(--azul-medio);
     color:var(--blanco-calido);
+    font-family:var(--font-display);
+    font-weight:600;
+    text-transform:uppercase;
+    font-size:13px;
+    letter-spacing:0.04em;
   }
 
+  /* ================= ACTIVIDAD ================= */
   .actividad-item{
-    font-family:-apple-system, sans-serif;
     background:var(--blanco-calido);
-    border-left:5px solid var(--dorado);
-    padding:12px 16px;
-    border-radius:8px;
-    margin-bottom:10px;
+    border:1.5px solid rgba(33,28,20,0.22);
+    padding:12px 15px;
+    border-radius:5px;
+    margin-bottom:9px;
     font-size:14px;
   }
   .actividad-item .tipo{
-    font-weight:bold;
-    color:var(--azul-oscuro);
+    font-family:var(--font-display);
+    font-weight:700;
+    color:var(--ink);
     text-transform:uppercase;
-    font-size:12px;
+    font-size:13px;
+    letter-spacing:0.05em;
   }
 
   footer{
+    display:none;
     text-align:center;
-    font-family:-apple-system, sans-serif;
     font-size:13px;
-    color:var(--azul-medio);
-    padding:30px 16px;
+    color:var(--ink-soft);
+    padding:26px 16px;
   }
 
-  @media (max-width:600px){
-    header h1{font-size:21px;}
-    .hero-semaforo h2{font-size:26px;}
+  /* ================= TABLET (≥768px): riel lateral ================= */
+  @media (min-width:768px){
+    nav{
+      flex-direction:column;
+      left:0; top:0; bottom:0; right:auto;
+      width:var(--sidebar-w);
+      height:auto;
+      padding:calc(var(--header-h) + 16px) 12px 16px;
+      border-top:none;
+      border-right:2px solid var(--ink);
+      gap:6px;
+      z-index:30;
+    }
+    nav button{
+      flex:none;
+      flex-direction:row;
+      justify-content:flex-start;
+      gap:12px;
+      font-size:14px;
+      padding:13px 16px;
+      text-align:left;
+    }
+    main{
+      margin-left:var(--sidebar-w);
+      padding:28px 32px calc(28px + var(--nav-h));
+    }
+    footer{ display:block; margin-left:var(--sidebar-w); }
+    .grid-resumen{ grid-template-columns:repeat(4,1fr); gap:16px; }
+    header h1{ font-size:25px; }
+    .hero-semaforo h2{ font-size:32px; }
+  }
+
+  @media (min-width:768px) and (max-width:1023px){
+    main{ padding-bottom:28px; }
+  }
+
+  /* ================= DESKTOP (≥1024px) ================= */
+  @media (min-width:1024px){
+    :root{ --sidebar-w:268px; }
+    main{ max-width:1280px; }
+    .grid-resumen{ gap:18px; }
+    .tarjeta .valor{ font-size:28px; }
+  }
+
+  @media (max-width:380px){
+    header h1{font-size:18px;}
+    .hero-semaforo h2{font-size:22px;}
+    nav button{font-size:13px;}
   }
 </style>
 </head>
 <body>
 
 <header>
-  <div>
-    <h1>Olimpo Control 1.0</h1>
-    <div class="sub">v0.9 — Tu negocio, en colores</div>
+  <div class="marca">
+    <img src="/img/logo.png" alt="Olimpo Control" class="sello" id="logoHeader">
+    <div>
+      <h1>Olimpo Control 1.0</h1>
+      <div class="sub">Tu negocio, en colores</div>
+    </div>
   </div>
   <div class="selector-ubicacion">
     <select id="selectUbicacion"></select>
@@ -468,37 +665,55 @@
 </header>
 
 <nav>
-  <button data-vista="hoy" class="activo">Hoy</button>
-  <button data-vista="inventario">Inventario</button>
-  <button data-vista="escanear">Escanear</button>
-  <button data-vista="etiquetas">Etiquetas</button>
-  <button data-vista="actividad">Actividad</button>
-  <button data-vista="avanzado">Avanzado</button>
+  <button data-vista="hoy" class="activo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line><line x1="4.6" y1="4.6" x2="6.6" y2="6.6"></line><line x1="17.4" y1="17.4" x2="19.4" y2="19.4"></line><line x1="4.6" y1="19.4" x2="6.6" y2="17.4"></line><line x1="17.4" y1="6.6" x2="19.4" y2="4.6"></line></svg>
+    <span>Hoy</span>
+  </button>
+  <button data-vista="inventario">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="8" height="8"></rect><rect x="13" y="10" width="8" height="8"></rect><rect x="8" y="3" width="8" height="6"></rect></svg>
+    <span>Inventario</span>
+  </button>
+  <button data-vista="escanear">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3"></path><path d="M16 4h3a1 1 0 0 1 1 1v3"></path><path d="M20 16v3a1 1 0 0 1-1 1h-3"></path><path d="M8 20H5a1 1 0 0 1-1-1v-3"></path><line x1="4" y1="12" x2="20" y2="12" stroke-dasharray="2.4 2.4"></line></svg>
+    <span>Escanear</span>
+  </button>
+  <button data-vista="etiquetas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.2V5a1 1 0 0 1 1-1h6.2L21 14.8 13.8 22 3 11.2z"></path><circle cx="7.6" cy="7.6" r="1.3" fill="currentColor" stroke="none"></circle></svg>
+    <span>Etiquetas</span>
+  </button>
+  <button data-vista="actividad">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,12 7,12 10,5 14,19 17,12 22,12"></polyline></svg>
+    <span>Actividad</span>
+  </button>
+  <button data-vista="avanzado">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2.5v3.4M12 18.1v3.4M3.6 6l2.4 2.4M18 15.6l2.4 2.4M3.6 18l2.4-2.4M18 8.4l2.4-2.4M2.5 12h3.4M18.1 12h3.4"></path></svg>
+    <span>Avanzado</span>
+  </button>
 </nav>
 
 <main>
 
   <!-- VISTA: HOY -->
   <section id="vista-hoy" class="vista activa">
-    <div id="heroSemaforo" class="hero-semaforo verde">
+    <div id="heroSemaforo" class="hero-semaforo verde tag-card">
       <h2 id="heroTitulo">Cargando tu negocio...</h2>
       <p id="heroSubtitulo"></p>
     </div>
 
     <div class="grid-resumen">
-      <div class="tarjeta">
+      <div class="tarjeta tag-card">
         <div class="etiqueta">Entró hoy</div>
         <div class="valor" id="resEntra">$0.00</div>
       </div>
-      <div class="tarjeta">
+      <div class="tarjeta tag-card">
         <div class="etiqueta">Salió hoy</div>
         <div class="valor" id="resSale">$0.00</div>
       </div>
-      <div class="tarjeta">
+      <div class="tarjeta tag-card">
         <div class="etiqueta">Ganancia de hoy</div>
         <div class="valor" id="resGanancia">$0.00</div>
       </div>
-      <div class="tarjeta">
+      <div class="tarjeta tag-card">
         <div class="etiqueta">Tu inventario vale</div>
         <div class="valor" id="resInventario">$0.00</div>
       </div>
@@ -513,10 +728,10 @@
     <h3 class="seccion" style="margin-top:0;">Tus productos</h3>
     <div class="filtros-estado" id="filtrosEstado">
       <button data-estado="" class="activo">Todos</button>
-      <button data-estado="rojo">🔴 Urgente</button>
-      <button data-estado="amarillo">🟡 Revisar</button>
-      <button data-estado="verde">🟢 Sano</button>
-      <button data-estado="azul">🔵 Oportunidad</button>
+      <button data-estado="rojo">Urgente</button>
+      <button data-estado="amarillo">Revisar</button>
+      <button data-estado="verde">Sano</button>
+      <button data-estado="azul">Oportunidad</button>
     </div>
     <div class="grid-cajas" id="gridInventario"></div>
   </section>
@@ -524,8 +739,8 @@
   <!-- VISTA: ESCANEAR -->
   <section id="vista-escanear" class="vista">
     <h3 class="seccion" style="margin-top:0;">Escanear o buscar</h3>
-    <div class="panel-escaner">
-      <p style="font-family:-apple-system, sans-serif; color:var(--azul-medio); margin-top:0;">
+    <div class="panel-escaner tag-card">
+      <p>
         Escribe o pega el código de barras / SKU. (En tablet con cámara, el lector conecta aquí mismo.)
       </p>
       <input id="inputEscaner" type="text" placeholder="Ej: 7501234567001 o MAR-RED-20" autocomplete="off">
@@ -555,24 +770,24 @@
     </div>
 
     <h3 class="seccion" style="margin-top:0;">Gastos mensuales</h3>
-    <div class="panel-escaner" style="text-align:left;">
-      <p style="font-family:-apple-system, sans-serif; color:var(--azul-medio); margin-top:0;">
+    <div class="panel-escaner tag-card" style="text-align:left;">
+      <p>
         Arriendo, luz, sueldos, internet, etc. Ingresa el total mensual de la ubicación seleccionada arriba. Se reparte entre 30 para estimar el gasto operativo del día en el P&amp;G.
       </p>
       <input id="inputGastosMensuales" type="number" min="0" step="0.01" placeholder="Ej: 350.00" style="text-align:left; max-width:220px;">
       <br>
       <button class="ir" id="btnGuardarGastos">Guardar</button>
-      <p id="msgGastos" style="font-family:-apple-system, sans-serif; font-size:14px; margin-top:10px;"></p>
+      <p id="msgGastos" style="font-size:14px; margin-top:10px;"></p>
     </div>
 
     <h3 class="seccion">Pérdidas y ganancias (hoy)</h3>
-    <table class="reporte" id="tablaPL"></table>
+    <div class="tabla-wrap"><table class="reporte" id="tablaPL"></table></div>
 
     <h3 class="seccion">Balance simplificado</h3>
-    <table class="reporte" id="tablaBalance"></table>
+    <div class="tabla-wrap"><table class="reporte" id="tablaBalance"></table></div>
 
     <h3 class="seccion">Inventario valorizado</h3>
-    <table class="reporte" id="tablaValorizado"></table>
+    <div class="tabla-wrap"><table class="reporte" id="tablaValorizado"></table></div>
   </section>
 
 </main>
@@ -583,7 +798,7 @@
 
 <!-- MODAL ETIQUETA -->
 <div class="modal-fondo" id="modalEtiqueta">
-  <div class="etiqueta-imprimible" id="contenidoEtiqueta">
+  <div class="etiqueta-imprimible tag-card" id="contenidoEtiqueta">
     <button class="cerrar" id="cerrarModal">✕</button>
   </div>
 </div>
@@ -617,12 +832,15 @@ function vistaActivaId(){
 
 function refrescarVistaActiva(){
   const v = vistaActivaId();
-  if (v === "hoy") cargarHoy();
-  if (v === "inventario") cargarInventario();
-  if (v === "etiquetas") cargarEtiquetas();
-  if (v === "actividad") cargarActividad();
-  if (v === "avanzado") cargarAvanzado();
+  const cargadores = { hoy: cargarHoy, inventario: cargarInventario, etiquetas: cargarEtiquetas, actividad: cargarActividad, avanzado: cargarAvanzado };
+  const fn = cargadores[v];
+  if (fn) Promise.resolve(fn()).catch(err => console.error(`Error cargando vista "${v}":`, err));
 }
+
+// --- Logo header: volver a Hoy ---
+document.getElementById("logoHeader").addEventListener("click", () => {
+  document.querySelector('nav button[data-vista="hoy"]').click();
+});
 
 // --- Navegación ---
 document.querySelectorAll("nav button").forEach(btn => {
@@ -641,7 +859,7 @@ async function cargarHoy(){
   const data = await res.json();
 
   const hero = document.getElementById("heroSemaforo");
-  hero.className = "hero-semaforo " + data.semaforoGeneral;
+  hero.className = "hero-semaforo tag-card " + data.semaforoGeneral;
   const titulos = {
     verde: "Tu negocio está en verde hoy.",
     amarillo: "Tu negocio está en amarillo: hay cosas que revisar.",
@@ -656,12 +874,13 @@ async function cargarHoy(){
   document.getElementById("resGanancia").textContent = fmtMoney(data.resumenDia.gananciaHoy);
   document.getElementById("resInventario").textContent = fmtMoney(data.resumenDia.inventarioValorizado);
 
+  const puntito = (color) => `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:currentColor;margin-right:9px;flex-shrink:0;"></span>`;
   const lista = document.getElementById("listaAlertas");
   if (data.alertas.length === 0){
-    lista.innerHTML = `<li class="verde" style="background:var(--verde-claro); color:var(--verde); border:2px solid var(--verde);">No hay alertas. Todo tranquilo.</li>`;
+    lista.innerHTML = `<li class="verde" style="background:var(--verde-claro); color:var(--verde); border:2px solid var(--verde);">${puntito()}No hay alertas. Todo tranquilo.</li>`;
   } else {
     lista.innerHTML = data.alertas.map(a =>
-      `<li class="${a.estado}">${a.estado === "rojo" ? "🔴" : "🟡"} ${a.mensaje}</li>`
+      `<li class="${a.estado}">${puntito()}${a.mensaje}</li>`
     ).join("");
   }
 }
@@ -682,11 +901,11 @@ async function cargarInventario(){
   const productos = await res.json();
   const grid = document.getElementById("gridInventario");
   if (productos.length === 0){
-    grid.innerHTML = `<p style="font-family:-apple-system, sans-serif;">No hay productos en este filtro.</p>`;
+    grid.innerHTML = `<p>No hay productos en este filtro.</p>`;
     return;
   }
   grid.innerHTML = productos.map(p => `
-    <div class="caja ${p.estado}" onclick="abrirFichaDesdeInventario('${p.id}')">
+    <div class="caja tag-card ${p.estado}" onclick="abrirFichaDesdeInventario('${p.id}')">
       <div class="nombre">${p.nombre}</div>
       <div class="detalle">${p.categoria} · ${p.sku}</div>
       <div class="stock">${p.stockActual}</div>
@@ -717,7 +936,7 @@ async function ejecutarEscaneo(){
   });
   if (!res.ok){
     const err = await res.json();
-    contenedor.innerHTML = `<p style="font-family:-apple-system, sans-serif; color:var(--rojo); font-weight:bold;">${err.error}</p>`;
+    contenedor.innerHTML = `<p style="color:var(--rojo); font-weight:bold;">${err.error}</p>`;
     return;
   }
   const p = await res.json();
@@ -732,7 +951,7 @@ document.getElementById("inputEscaner").addEventListener("keydown", (e) => {
 function pintarFicha(p){
   const contenedor = document.getElementById("fichaResultado");
   contenedor.innerHTML = `
-    <div class="ficha-producto">
+    <div class="ficha-producto tag-card">
       <div class="titulo">${p.nombre}</div>
       <div class="precio">${fmtMoney(p.precio)}</div>
       <div class="linea"><strong>SKU:</strong> ${p.sku}</div>
@@ -776,10 +995,10 @@ async function cargarEtiquetas(){
   const productos = await res.json();
   const grid = document.getElementById("gridEtiquetas");
   grid.innerHTML = productos.map(p => `
-    <div class="etiqueta-card" onclick="abrirEtiqueta('${p.id}')">
+    <div class="etiqueta-card tag-card" onclick="abrirEtiqueta('${p.id}')">
       <div class="nombre-prod">${p.nombre}</div>
       <div class="precio-prod">${fmtMoney(p.precio)}</div>
-      <div style="font-family:monospace; font-size:13px;">${p.sku}</div>
+      <div class="sku-prod">${p.sku}</div>
     </div>
   `).join("");
 }
@@ -790,12 +1009,13 @@ async function abrirEtiqueta(id){
   const p = data.producto;
   document.getElementById("contenidoEtiqueta").innerHTML = `
     <button class="cerrar" id="cerrarModal2">✕</button>
+    <img src="/img/logo.png" alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--brass);">
     <h4>${p.nombre}</h4>
     <div class="precio-grande">${fmtMoney(p.precio)}</div>
     <div class="codigo">${p.barcode}</div>
     <div class="barras"></div>
     <img src="${data.qrDataUrl}" width="160" height="160" alt="QR del producto">
-    <div style="font-family:-apple-system, sans-serif; font-size:12px; color:var(--azul-medio);">Escanea para ver la ficha completa</div>
+    <div style="font-size:13px; color:var(--azul-medio);">Escanea para ver la ficha completa</div>
     <br>
     <button class="imprimir" onclick="window.print()">Imprimir</button>
   `;
@@ -817,7 +1037,7 @@ async function cargarActividad(){
   const items = await res.json();
   const cont = document.getElementById("listaActividad");
   if (items.length === 0){
-    cont.innerHTML = `<p style="font-family:-apple-system, sans-serif;">Todavía no hay actividad registrada en esta sesión.</p>`;
+    cont.innerHTML = `<p>Todavía no hay actividad registrada en esta sesión.</p>`;
     return;
   }
   cont.innerHTML = items.map(it => `
@@ -916,10 +1136,19 @@ async function cargarAvanzado(){
 
 // --- Init ---
 (async function init(){
-  await cargarUbicaciones();
-  cargarHoy();
+  try{
+    await cargarUbicaciones();
+    await cargarHoy();
+  }catch(err){
+    console.error("No se pudo conectar con el servidor:", err);
+    const hero = document.getElementById("heroSemaforo");
+    hero.className = "hero-semaforo tag-card amarillo";
+    document.getElementById("heroTitulo").textContent = "No se pudo conectar con el servidor.";
+    document.getElementById("heroSubtitulo").textContent = "Verifica que el backend (server.js) esté corriendo y vuelve a cargar la página.";
+  }
 })();
 </script>
 
-</body>
-</html>
+
+
+</body></html>
