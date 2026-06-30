@@ -120,12 +120,26 @@
         else { s.textContent = ""; s.classList.remove("lleno"); }
       });
     }
-    padEl.addEventListener("click", (e) => {
-      const b = e.target.closest("button[data-d]"); if (!b || entrada.length >= 3) return;
-      entrada.push(Number(b.dataset.d));
-      pintar();
-      if (entrada.length === 3) setTimeout(() => onComplete(entrada.join("")), 150);
-    });
+    // BUG FIJADO: montarTeclado() se vuelve a llamar en cada reintento (un PIN
+    // equivocado re-baraja el teclado). Antes esto hacía padEl.addEventListener
+    // de nuevo cada vez, ACUMULANDO listeners sobre el mismo nodo persistente
+    // (#oc-pad / #oc-pad2 nunca se recrean, solo su innerHTML). Resultado: tras
+    // N intentos fallidos, el siguiente PIN correcto disparaba validar()/
+    // alCompletar() N+1 veces en paralelo. Fix: el listener se monta UNA sola
+    // vez por nodo (guardado en un dataset flag) y lee el callback/estado
+    // vigente desde padEl._ocTeclado, que cada llamada a montarTeclado() sí
+    // reemplaza por completo.
+    padEl._ocTeclado = { entrada: () => entrada, push: (d) => entrada.push(d), pintar, onComplete };
+    if (!padEl.dataset.ocListenerMontado) {
+      padEl.dataset.ocListenerMontado = "1";
+      padEl.addEventListener("click", (e) => {
+        const st = padEl._ocTeclado; // siempre el estado de la montada MÁS RECIENTE
+        const b = e.target.closest("button[data-d]"); if (!b || st.entrada().length >= 3) return;
+        st.push(Number(b.dataset.d));
+        st.pintar();
+        if (st.entrada().length === 3) { const code = st.entrada().join(""); setTimeout(() => st.onComplete(code), 150); }
+      });
+    }
     pintar();
     return { reset: () => { entrada = []; pintar(); } };
   }
