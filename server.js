@@ -1,15 +1,16 @@
 // server.js — Backend de Olimpo Control 1.0
-// Capa visual/pedagógica sobre datos de inventario tipo Loyverse.
-// Stack: Express + lowdb (archivo JSON). Cero servicios externos requeridos
-// para correr local; pensado para desplegar en Render/Railway/Fly/VPS con
-// "npm install && npm start" y nada más.
+// Capa visual/pedagógica sobre Loyverse (o datos de demo si no hay token).
+// Stack: Express + data.js (adaptador Loyverse/demo). "npm install && npm start"
+// y nada más para correr local o desplegar en Render/Railway/Fly/VPS.
+
+require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
 const QRCode = require("qrcode");
 const path = require("path");
-const { randomUUID } = require("crypto");
-const db = require("./db");
+const data = require("./data");
+const umbrales = require("./umbrales");
 
 const app = express();
 app.use(cors());
@@ -20,7 +21,6 @@ const ZONA = "America/Guayaquil"; // Ecuador, UTC-5, sin horario de verano
 
 // ---------- Helpers de fecha ----------
 function hoyISO() {
-  // YYYY-MM-DD en hora de Ecuador, sin depender de la TZ del servidor
   const f = new Intl.DateTimeFormat("en-CA", {
     timeZone: ZONA,
     year: "numeric",
@@ -28,12 +28,6 @@ function hoyISO() {
     day: "2-digit",
   });
   return f.format(new Date()); // en-CA -> YYYY-MM-DD
-}
-
-function esDeHoy(fechaISO) {
-  if (!fechaISO) return false;
-  const f = new Intl.DateTimeFormat("en-CA", { timeZone: ZONA }).format(new Date(fechaISO));
-  return f === hoyISO();
 }
 
 // ---------- Helpers de negocio ----------
@@ -55,25 +49,12 @@ function calcularEstado(p) {
   return { estado: "verde", mensaje: "Stock saludable" };
 }
 
-function nombreUbicacion(ubicacionId) {
-  const u = db.get("ubicaciones").find({ id: ubicacionId }).value();
-  return u ? u.nombre : "Ubicación desconocida";
-}
-
 function toResumenInventario(p) {
   const { estado, mensaje } = calcularEstado(p);
-  return {
-    id: p.id,
-    nombre: p.nombre,
-    categoria: p.categoria,
-    sku: p.sku,
-    stockActual: p.stockActual,
-    estado,
-    mensaje,
-  };
+  return { id: p.id, nombre: p.nombre, categoria: p.categoria, sku: p.sku, stockActual: p.stockActual, estado, mensaje };
 }
 
-function toFicha(p) {
+async function toFicha(p) {
   const { estado, mensaje } = calcularEstado(p);
   return {
     id: p.id,
@@ -87,41 +68,35 @@ function toFicha(p) {
     mensaje,
     categoria: p.categoria,
     ubicacionId: p.ubicacionId,
-    ubicacionNombre: nombreUbicacion(p.ubicacionId),
+    ubicacionNombre: await data.nombreUbicacion(p.ubicacionId),
   };
 }
 
 const ORDEN_ESTADO = { rojo: 0, amarillo: 1, azul: 2, verde: 3 };
 
-function productosFiltrados(ubicacionId) {
-  let lista = db.get("productos").value();
-  if (ubicacionId && ubicacionId !== "todas") {
-    lista = lista.filter((p) => p.ubicacionId === ubicacionId);
-  }
-  return lista;
-}
-
-function registrarMovimiento(tipo, detalle) {
-  db.get("movimientos")
-    .push({ id: randomUUID(), tipo, detalle, fecha: new Date().toISOString() })
-    .write();
+function asyncRoute(fn) {
+  return (req, res) => fn(req, res).catch((err) => {
+    console.error(err);
+    res.status(502).json({ error: "No se pudo obtener datos de Loyverse. Verifica el token y vuelve a intentar." });
+  });
 }
 
 // ====================== RUTAS ======================
 
-// --- Ubicaciones ---
-app.get("/api/ubicaciones", (req, res) => {
-  res.json(db.get("ubicaciones").value());
+app.get("/api/modo", (req, res) => {
+  res.json({ modo: data.modo });
 });
 
+// --- Ubicaciones ---
+app.get("/api/ubicaciones", asyncRoute(async (req, res) => {
+  res.json(await data.getUbicaciones());
+}));
+
 // --- Dashboard (vista Hoy) ---
-app.get("/api/dashboard", (req, res) => {
+app.get("/api/dashboard", asyncRoute(async (req, res) => {
   const { ubicacionId } = req.query;
-  const productos = productosFiltrados(ubicacionId);
-  const ventasHoy = db
-    .get("ventas")
-    .value()
-    .filter((v) => esDeHoy(v.fecha) && (!ubicacionId || ubicacionId === "todas" || v.ubicacionId === ubicacionId));
+  const productos = await data.getProductos(ubicacionId);
+  const ventasHoy = await data.getVentasHoy(ubicacionId, hoyISO());
 
   const entra = ventasHoy.reduce((acc, v) => acc + v.precioUnit * v.cantidad, 0);
   const sale = ventasHoy.reduce((acc, v) => acc + v.costoUnit * v.cantidad, 0);
@@ -150,16 +125,14 @@ app.get("/api/dashboard", (req, res) => {
     },
     alertas,
   });
-});
+}));
 
 // --- Inventario ---
-app.get("/api/productos", (req, res) => {
+app.get("/api/productos", asyncRoute(async (req, res) => {
   const { ubicacionId, estado } = req.query;
-  let productos = productosFiltrados(ubicacionId).map((p) => ({ p, resumen: toResumenInventario(p) }));
+  let productos = (await data.getProductos(ubicacionId)).map((p) => ({ p, resumen: toResumenInventario(p) }));
 
-  if (estado) {
-    productos = productos.filter((x) => x.resumen.estado === estado);
-  }
+  if (estado) productos = productos.filter((x) => x.resumen.estado === estado);
 
   productos.sort((a, b) => {
     const diff = ORDEN_ESTADO[a.resumen.estado] - ORDEN_ESTADO[b.resumen.estado];
@@ -168,128 +141,75 @@ app.get("/api/productos", (req, res) => {
   });
 
   res.json(productos.map((x) => x.resumen));
-});
+}));
 
-app.get("/api/productos/:id", (req, res) => {
-  const p = db.get("productos").find({ id: req.params.id }).value();
+app.get("/api/productos/:id", asyncRoute(async (req, res) => {
+  const p = await data.getProducto(req.params.id);
   if (!p) return res.status(404).json({ error: "Producto no encontrado." });
-  res.json(toFicha(p));
-});
+  res.json(await toFicha(p));
+}));
+
+// --- Umbrales (puntos de reorden, editables por José/admin) ---
+app.post("/api/productos/:id/umbrales", asyncRoute(async (req, res) => {
+  const p = await data.getProducto(req.params.id);
+  if (!p) return res.status(404).json({ error: "Producto no encontrado." });
+  const variantId = p.variantId || p.id;
+  umbrales.set(variantId, { umbralRojo: req.body.umbralRojo, umbralAmarillo: req.body.umbralAmarillo });
+  res.json({ ok: true });
+}));
 
 // --- Escanear ---
-app.post("/api/escanear", (req, res) => {
-  const codigo = String(req.body.codigo || "").trim().toLowerCase();
+app.post("/api/escanear", asyncRoute(async (req, res) => {
+  const codigo = String(req.body.codigo || "").trim();
   if (!codigo) return res.status(400).json({ error: "Código vacío." });
 
-  const p = db
-    .get("productos")
-    .find(
-      (x) =>
-        String(x.barcode).toLowerCase() === codigo || String(x.sku).toLowerCase() === codigo
-    )
-    .value();
-
+  const p = await data.buscarPorCodigo(codigo);
   if (!p) return res.status(404).json({ error: "No se encontró ningún producto con ese código." });
-  res.json(toFicha(p));
-});
+  res.json(await toFicha(p));
+}));
 
 // --- Venta rápida ---
-app.post("/api/productos/:id/venta", (req, res) => {
-  const p = db.get("productos").find({ id: req.params.id }).value();
-  if (!p) return res.status(404).json({ error: "Producto no encontrado." });
-
+app.post("/api/productos/:id/venta", asyncRoute(async (req, res) => {
   const cantidad = Number.isInteger(req.body.cantidad) && req.body.cantidad > 0 ? req.body.cantidad : 1;
-
-  if (p.stockActual < cantidad) {
-    return res.status(400).json({ error: `No hay suficiente stock disponible (quedan ${p.stockActual}).` });
-  }
-
-  db.get("productos").find({ id: p.id }).assign({ stockActual: p.stockActual - cantidad }).write();
-
-  db.get("ventas")
-    .push({
-      id: randomUUID(),
-      productoId: p.id,
-      ubicacionId: p.ubicacionId,
-      cantidad,
-      precioUnit: p.precio,
-      costoUnit: p.costo,
-      fecha: new Date().toISOString(),
-    })
-    .write();
-
-  registrarMovimiento("venta", {
-    producto: p.nombre,
-    cantidad,
-    total: Number((p.precio * cantidad).toFixed(2)),
-    ubicacion: nombreUbicacion(p.ubicacionId),
-  });
-
-  const actualizado = db.get("productos").find({ id: p.id }).value();
-  res.json({ producto: toFicha(actualizado) });
-});
+  const r = await data.venderUno(req.params.id, cantidad);
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json({ producto: await toFicha(r.producto) });
+}));
 
 // --- Ajuste manual de stock ---
-app.post("/api/productos/:id/ajustar", (req, res) => {
-  const p = db.get("productos").find({ id: req.params.id }).value();
-  if (!p) return res.status(404).json({ error: "Producto no encontrado." });
-
+app.post("/api/productos/:id/ajustar", asyncRoute(async (req, res) => {
   const delta = Number.isInteger(req.body.delta) ? req.body.delta : 0;
   const motivo = req.body.motivo || "Ajuste manual";
-  const nuevoStock = p.stockActual + delta;
-
-  if (nuevoStock < 0) {
-    return res.status(400).json({ error: `Ese ajuste dejaría el stock en negativo (actual: ${p.stockActual}).` });
-  }
-
-  db.get("productos").find({ id: p.id }).assign({ stockActual: nuevoStock }).write();
-
-  registrarMovimiento("ajuste", {
-    producto: p.nombre,
-    delta,
-    motivo,
-    stockResultante: nuevoStock,
-    ubicacion: nombreUbicacion(p.ubicacionId),
-  });
-
-  const actualizado = db.get("productos").find({ id: p.id }).value();
-  res.json(toFicha(actualizado));
-});
+  const r = await data.ajustar(req.params.id, delta, motivo);
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json(await toFicha(r.producto));
+}));
 
 // --- Etiqueta con QR ---
-app.get("/api/productos/:id/etiqueta", async (req, res) => {
-  const p = db.get("productos").find({ id: req.params.id }).value();
+app.get("/api/productos/:id/etiqueta", asyncRoute(async (req, res) => {
+  const p = await data.getProducto(req.params.id);
   if (!p) return res.status(404).json({ error: "Producto no encontrado." });
 
   try {
     const payload = JSON.stringify({ id: p.id, sku: p.sku, barcode: p.barcode });
     const qrDataUrl = await QRCode.toDataURL(payload, { margin: 1, width: 320 });
-    res.json({ producto: toFicha(p), qrDataUrl });
+    res.json({ producto: await toFicha(p), qrDataUrl });
   } catch (err) {
     res.status(500).json({ error: "No se pudo generar el código QR." });
   }
-});
+}));
 
-// --- Actividad reciente ---
+// --- Actividad reciente (siempre local: acciones hechas desde Olimpo Control) ---
 app.get("/api/actividad", (req, res) => {
-  const items = db.get("movimientos").value().slice().reverse().slice(0, 100);
-  res.json(items);
+  res.json(data.getActividad());
 });
 
-// --- Configuración: gastos mensuales (simplificado, un número por ubicación) ---
+// --- Configuración: gastos mensuales (siempre local, sin importar el modo) ---
 app.get("/api/configuracion/gastos", (req, res) => {
-  const { ubicacionId } = req.query;
-  const gastos = db.get("configuracion.gastosMensuales").value() || {};
-
-  if (!ubicacionId || ubicacionId === "todas") {
-    const total = Object.values(gastos).reduce((acc, v) => acc + Number(v || 0), 0);
-    return res.json({ ubicacionId: "todas", gastosMensuales: Number(total.toFixed(2)), porUbicacion: gastos });
-  }
-
-  res.json({ ubicacionId, gastosMensuales: Number(gastos[ubicacionId] || 0) });
+  res.json(data.getGastosMensuales(req.query.ubicacionId));
 });
 
-app.post("/api/configuracion/gastos", (req, res) => {
+app.post("/api/configuracion/gastos", asyncRoute(async (req, res) => {
   const { ubicacionId, gastosMensuales } = req.body;
   const monto = Number(gastosMensuales);
 
@@ -299,35 +219,26 @@ app.post("/api/configuracion/gastos", (req, res) => {
   if (!Number.isFinite(monto) || monto < 0) {
     return res.status(400).json({ error: "El monto de gastos mensuales debe ser un número igual o mayor a 0." });
   }
-  if (!db.get("ubicaciones").find({ id: ubicacionId }).value()) {
+  const ubicaciones = await data.getUbicaciones();
+  if (!ubicaciones.find((u) => u.id === ubicacionId)) {
     return res.status(404).json({ error: "Ubicación no encontrada." });
   }
 
-  db.set(`configuracion.gastosMensuales.${ubicacionId}`, Number(monto.toFixed(2))).write();
+  data.setGastosMensuales(ubicacionId, monto);
   res.json({ ubicacionId, gastosMensuales: Number(monto.toFixed(2)) });
-});
+}));
 
 // --- Reportes (modo avanzado) ---
-app.get("/api/reportes/pl", (req, res) => {
+app.get("/api/reportes/pl", asyncRoute(async (req, res) => {
   const { ubicacionId } = req.query;
-  const ventasHoy = db
-    .get("ventas")
-    .value()
-    .filter((v) => esDeHoy(v.fecha) && (!ubicacionId || ubicacionId === "todas" || v.ubicacionId === ubicacionId));
+  const ventasHoy = await data.getVentasHoy(ubicacionId, hoyISO());
 
   const ingresos = ventasHoy.reduce((acc, v) => acc + v.precioUnit * v.cantidad, 0);
   const costoVentas = ventasHoy.reduce((acc, v) => acc + v.costoUnit * v.cantidad, 0);
   const utilidadBruta = ingresos - costoVentas;
 
-  const gastos = db.get("configuracion.gastosMensuales").value() || {};
-  let gastosMensuales = 0;
-  if (!ubicacionId || ubicacionId === "todas") {
-    gastosMensuales = Object.values(gastos).reduce((acc, v) => acc + Number(v || 0), 0);
-  } else {
-    gastosMensuales = Number(gastos[ubicacionId] || 0);
-  }
-  const gastosOperativos = Number((gastosMensuales / 30).toFixed(2)); // prorrateo diario simple
-
+  const { gastosMensuales } = data.getGastosMensuales(ubicacionId);
+  const gastosOperativos = Number((gastosMensuales / 30).toFixed(2));
   const utilidadNeta = utilidadBruta - gastosOperativos;
 
   res.json({
@@ -337,15 +248,12 @@ app.get("/api/reportes/pl", (req, res) => {
     gastosOperativos,
     utilidadNeta: Number(utilidadNeta.toFixed(2)),
   });
-});
+}));
 
-app.get("/api/reportes/balance", (req, res) => {
+app.get("/api/reportes/balance", asyncRoute(async (req, res) => {
   const { ubicacionId } = req.query;
-  const productos = productosFiltrados(ubicacionId);
-  const ventasHoy = db
-    .get("ventas")
-    .value()
-    .filter((v) => esDeHoy(v.fecha) && (!ubicacionId || ubicacionId === "todas" || v.ubicacionId === ubicacionId));
+  const productos = await data.getProductos(ubicacionId);
+  const ventasHoy = await data.getVentasHoy(ubicacionId, hoyISO());
 
   const efectivoEstimado = ventasHoy.reduce((acc, v) => acc + v.precioUnit * v.cantidad, 0);
   const inventarioValorizado = productos.reduce((acc, p) => acc + p.precio * p.stockActual, 0);
@@ -357,11 +265,11 @@ app.get("/api/reportes/balance", (req, res) => {
       total: Number((efectivoEstimado + inventarioValorizado).toFixed(2)),
     },
   });
-});
+}));
 
-app.get("/api/reportes/valorizado", (req, res) => {
+app.get("/api/reportes/valorizado", asyncRoute(async (req, res) => {
   const { ubicacionId } = req.query;
-  const productos = productosFiltrados(ubicacionId);
+  const productos = await data.getProductos(ubicacionId);
 
   const filas = productos.map((p) => {
     const valorCosto = p.costo * p.stockActual;
@@ -392,7 +300,7 @@ app.get("/api/reportes/valorizado", (req, res) => {
       utilidadPotencial: Number(totales.utilidadPotencial.toFixed(2)),
     },
   });
-});
+}));
 
 // --- Fallback: cualquier ruta no-API sirve el frontend ---
 app.get(/^(?!\/api).*/, (req, res) => {
@@ -401,5 +309,5 @@ app.get(/^(?!\/api).*/, (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Olimpo Control 1.0 escuchando en http://localhost:${PORT}`);
+  console.log(`Olimpo Control 1.0 escuchando en http://localhost:${PORT} — modo: ${data.modo}`);
 });
