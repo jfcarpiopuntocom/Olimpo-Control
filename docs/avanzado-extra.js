@@ -66,46 +66,45 @@
       <p style="font-size:14px;color:var(--ink-soft);margin-top:0;">Correo del dueño para recuperar las claves. Una vez guardado se oculta y queda ofuscado.</p>
       <div id="oc-email-row"></div>
       <div style="margin-top:18px;">
-        <p style="font-size:14px;color:var(--ink-soft);">Claves (PIN de 3 dígitos). Cambia los códigos si lo necesitas; usa dígitos 0-9.</p>
+        <p style="font-size:14px;color:var(--ink-soft);">Claves (PIN de 3 dígitos). Por seguridad, los códigos actuales NO se muestran aquí (se guardan cifrados) — escribe los NUEVOS solo si quieres cambiarlos.</p>
         <div style="display:flex;flex-direction:column;gap:8px;max-width:340px;">
-          <label style="font-size:13px;">Dueño <input id="oc-c-owner" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
-          <label style="font-size:13px;">Empleado <input id="oc-c-emp" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
-          <label style="font-size:13px;">Contable <input id="oc-c-acct" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
+          <label style="font-size:13px;">Dueño <input id="oc-c-owner" maxlength="3" inputmode="numeric" placeholder="•••" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
+          <label style="font-size:13px;">Empleado <input id="oc-c-emp" maxlength="3" inputmode="numeric" placeholder="•••" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
+          <label style="font-size:13px;">Contable <input id="oc-c-acct" maxlength="3" inputmode="numeric" placeholder="•••" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
         </div>
-        <button id="oc-save-codes" class="ir" style="margin-top:12px;background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">Guardar claves</button>
+        <button id="oc-save-codes" class="ir" style="margin-top:12px;background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">Guardar nuevas claves</button>
         <p id="oc-codes-msg" style="font-size:14px;margin-top:8px;"></p>
       </div>`;
     vista.appendChild(gestion);
 
-    pintarEmail();
-    pintarCodigos();
+    window.OCAuth.listo().then(() => { pintarEmail(); });
 
-    $("oc-save-codes").addEventListener("click", () => {
-      const c = window.OCAuth.cfg();
+    // Cambiar los 3 PINs rota TODO (nuevo salt + nuevos hashes). Por eso se
+    // piden los tres juntos: no se puede "mantener" un hash viejo bajo un
+    // salt nuevo. JFC pidió explícitamente: si el dueño cambia su código,
+    // EXIGIR que ya tenga un correo de recuperación guardado (si no, no se
+    // puede recuperar el código nuevo si se le olvida). El correo en sí no
+    // se toca aquí — se preserva tal cual esté guardado.
+    $("oc-save-codes").addEventListener("click", async () => {
       const o = $("oc-c-owner").value.trim(), e = $("oc-c-emp").value.trim(), a = $("oc-c-acct").value.trim();
       const valido = (s) => /^[0-9]{3}$/.test(s);
       if (![o, e, a].every(valido)) { msg("oc-codes-msg", "Cada clave debe ser 3 dígitos (0-9).", "var(--rojo)"); return; }
-      c.owner = o; c.empleados = [e]; c.acct = a;
-      window.OCAuth.guardar(c);
-      msg("oc-codes-msg", "Claves guardadas.", "var(--verde)");
+      const correoActual = window.OCSecure.leerCorreo();
+      if (!correoActual) { msg("oc-codes-msg", "Antes de cambiar las claves, registra tu correo de recuperación arriba (si olvidas el código nuevo, sin correo no hay forma de recuperarlo).", "var(--rojo)"); return; }
+      await window.OCSecure.guardarSecreto(o, [e], a, correoActual);
+      $("oc-c-owner").value = ""; $("oc-c-emp").value = ""; $("oc-c-acct").value = "";
+      msg("oc-codes-msg", "Claves guardadas y cifradas.", "var(--verde)");
     });
   }
 
-  function pintarCodigos() {
-    const c = window.OCAuth.cfg();
-    $("oc-c-owner").value = c.owner;
-    $("oc-c-emp").value = (c.empleados || [])[0] || "";
-    $("oc-c-acct").value = c.acct;
-  }
-
   function pintarEmail() {
-    const c = window.OCAuth.cfg();
+    const email = window.OCSecure.leerCorreo();
     const row = $("oc-email-row");
-    if (c.email) {
+    if (email) {
       row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span style="font-family:var(--font-mono);font-size:15px;color:var(--ink);">${window.OCAuth.enmascarar(c.email)}</span>
+        <span style="font-family:var(--font-mono);font-size:15px;color:var(--ink);">${window.OCAuth.enmascarar(email)}</span>
         <button id="oc-email-edit" style="font-size:13px;padding:8px 12px;border:2px solid var(--azul-medio);border-radius:5px;background:transparent;color:var(--azul-medio);cursor:pointer;">Cambiar</button></div>`;
-      $("oc-email-edit").addEventListener("click", () => { const cc = window.OCAuth.cfg(); cc.email = ""; window.OCAuth.guardar(cc); pintarEmail(); });
+      $("oc-email-edit").addEventListener("click", () => { window.OCSecure.actualizarCorreo(""); pintarEmail(); });
     } else {
       row.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;">
         <input id="oc-email-in" type="email" placeholder="correo@dominio.com" style="flex:1;min-width:200px;padding:10px;border:2px solid var(--azul-medio);border-radius:5px;font-family:var(--font-mono);">
@@ -114,7 +113,7 @@
       $("oc-email-save").addEventListener("click", () => {
         const v = $("oc-email-in").value.trim();
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { msg("oc-email-msg", "Correo no válido.", "var(--rojo)"); return; }
-        const cc = window.OCAuth.cfg(); cc.email = v; window.OCAuth.guardar(cc); pintarEmail();
+        window.OCSecure.actualizarCorreo(v); pintarEmail();
       });
     }
   }

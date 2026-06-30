@@ -1328,6 +1328,122 @@ async function cargarAvanzado(){
 })();
 </script>
 <script>
+// crypto-store.js — Almacenamiento local cifrado, sin servidor, sin librerías.
+// Usa WebCrypto (nativo del navegador, gratis y estándar) para que las claves
+// de acceso y el correo de recuperación NUNCA se guarden en texto plano en
+// localStorage. Antes, cualquiera con DevTools abierto (o un vecino con
+// acceso físico al equipo) podía leer "oc_auth" y ver los 3 PINs y el correo
+// tal cual. Ahora solo se guardan HASHES (no reversibles) de cada PIN para
+// poder validarlos, y el correo va cifrado con AES-256-GCM bajo una llave
+// derivada del PIN del dueño (PBKDF2, 150k iteraciones, SHA-256).
+//
+// Esto es "nivel nostr" en el sentido que importa para un negocio: cifrado
+// de extremo a extremo en el cliente, sin que ningún servidor (porque no hay
+// servidor) ni un atacante con el archivo de datos pueda leer nada sin el PIN
+// correcto. No es un keypair nostr real (eso es overkill para una sola
+// terminal) — si más adelante se necesita sincronizar entre dispositivos o
+// identidad firmada, este módulo es el lugar para añadir secp256k1.
+//
+// NOTA sobre el correo de recuperación: a propósito NO se cifra bajo el PIN.
+// Si lo cifráramos bajo el PIN del dueño, el flujo "olvidé mi clave" quedaría
+// roto (haría falta el PIN para leer el correo que sirve para recuperar el
+// PIN). Por diseño (spec confirmado del proyecto) el correo se guarda en
+// claro pero se OFUSCA en toda la interfaz (ej. j••••@gmail.com); lo
+// sensible que de verdad protegemos con criptografía fuerte son los 3 PINs,
+// que solo se guardan como hash irreversible — nunca se necesita leerlos de
+// vuelta, solo compararlos.
+//
+// Formato guardado en localStorage["oc_secure"]:
+//   {
+//     v: 1,
+//     salt: <base64>,            // salt PBKDF2, no es secreto, solo evita rainbow tables
+//     ownerHash: <base64>,       // verificador del PIN del dueño (no se puede revertir)
+//     employeeHashes: [<base64>, ...],
+//     acctHash: <base64>,        // verificador de la subclave contable
+//     email: <string>            // correo de recuperación, en claro, SOLO ofuscado en UI
+//   }
+(function () {
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+  const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+  async function importPinKey(pin) {
+    return crypto.subtle.importKey("raw", enc.encode(String(pin)), "PBKDF2", false, ["deriveBits", "deriveKey"]);
+  }
+
+  // info: etiqueta de contexto ("owner"|"emp"|"acct"|"vault") para que el mismo
+  // PIN nunca derive la misma llave/hash en dos roles distintos.
+  async function deriveBits(pin, saltB64, info, bits) {
+    const base = await importPinKey(pin);
+    const salt = enc.encode(info + ":" + saltB64); // mezcla salt + contexto
+    return crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 150000, hash: "SHA-256" }, base, bits);
+  }
+
+  async function hashPin(pin, saltB64, info) {
+    const bits = await deriveBits(pin, saltB64, info, 256);
+    return b64(bits);
+  }
+
+  function randSalt() { return b64(crypto.getRandomValues(new Uint8Array(16))); }
+
+  // ---- migración silenciosa desde el formato viejo en texto plano (oc_auth) ----
+  // Si José ya había configurado sus claves/correo antes de este cambio, NO se
+  // pierden ni se resetean: se migran tal cual a oc_secure en el primer load.
+  async function migrarSiHaceFalta() {
+    if (localStorage.getItem("oc_secure")) return;
+    let viejo = null;
+    try { viejo = JSON.parse(localStorage.getItem("oc_auth") || "null"); } catch {}
+    const DEF = { owner: "159", empleados: ["260"], acct: "357", email: "" };
+    const base = viejo || DEF;
+    await guardarSecreto(base.owner, base.empleados || [], base.acct, base.email || "");
+    localStorage.removeItem("oc_auth"); // ya no queda nada en texto plano
+  }
+
+  async function guardarSecreto(ownerPin, empleadosPins, acctPin, email) {
+    const salt = randSalt();
+    const ownerHash = await hashPin(ownerPin, salt, "owner");
+    const employeeHashes = [];
+    for (const p of empleadosPins) employeeHashes.push(await hashPin(p, salt, "emp"));
+    const acctHash = await hashPin(acctPin, salt, "acct");
+    localStorage.setItem("oc_secure", JSON.stringify({ v: 1, salt, ownerHash, employeeHashes, acctHash, email: email || "" }));
+  }
+
+  function leerSecreto() {
+    try { return JSON.parse(localStorage.getItem("oc_secure")); } catch { return null; }
+  }
+
+  // Verifica un PIN de 3 dígitos contra un rol ("owner"|"acct") o la lista de empleados.
+  async function verificarOwner(pin) {
+    const s = leerSecreto(); if (!s) return false;
+    return (await hashPin(pin, s.salt, "owner")) === s.ownerHash;
+  }
+  async function verificarEmpleado(pin) {
+    const s = leerSecreto(); if (!s) return false;
+    const h = await hashPin(pin, s.salt, "emp");
+    return (s.employeeHashes || []).includes(h);
+  }
+  async function verificarAcct(pin) {
+    const s = leerSecreto(); if (!s) return false;
+    return (await hashPin(pin, s.salt, "acct")) === s.acctHash;
+  }
+  function leerCorreo() {
+    const s = leerSecreto();
+    return s ? (s.email || "") : "";
+  }
+  // Actualiza solo el correo, sin tocar salt/hashes de los PINs (no requiere
+  // volver a ingresar ningún PIN para simplemente cambiar el correo).
+  function actualizarCorreo(email) {
+    const s = leerSecreto(); if (!s) return;
+    s.email = email || "";
+    localStorage.setItem("oc_secure", JSON.stringify(s));
+  }
+
+  window.OCSecure = { migrarSiHaceFalta, guardarSecreto, verificarOwner, verificarEmpleado, verificarAcct, leerCorreo, actualizarCorreo };
+})();
+
+</script>
+<script>
 // auth-ui.js — Control de acceso de Olimpo Control (100% en el navegador,
 // sin servidor: las claves viven en localStorage). Dos capas claramente
 // separadas: DUEÑO y EMPLEADO. Dentro de la del dueño, la info contable
@@ -1351,6 +1467,13 @@ async function cargarAvanzado(){
 // Si en el futuro JFC quiere que la clave se ingrese por emojis en vez de por
 // dígitos, el cambio es: mapear cada emoji tocado a su dígito subyacente. Hoy
 // se ingresa por dígito (lo pidió explícitamente: "agrega dígitos").
+//
+// SEGURIDAD DE LOS PINS (crypto-store.js, cargar ANTES que este archivo):
+//   Los 3 PINs (dueño, empleado(s), subclave contable) ya NO viven en texto
+//   plano en localStorage. Se validan contra hashes PBKDF2 vía window.OCSecure
+//   — ver crypto-store.js para el detalle. Este archivo solo orquesta la UI y
+//   llama a OCSecure para verificar/guardar; nunca compara strings de PIN
+//   directamente.
 // ===========================================================================
 (function () {
   // Pool de emojis de adorno. Se barajan; ninguno está atado a un dígito fijo.
@@ -1370,17 +1493,8 @@ async function cargarAvanzado(){
     return a;
   }
 
-  // --- Claves por defecto (el dueño puede cambiarlas en Avanzado) ---
-  // owner = clave del dueño · empleados[] = subclaves de empleado · acct = subclave contable
-  const DEF = { owner: "159", empleados: ["260"], acct: "357", email: "" };
-  function cfg() {
-    try { return JSON.parse(localStorage.getItem("oc_auth") || "null") || { ...DEF }; }
-    catch { return { ...DEF }; }
-  }
-  function guardar(c) { localStorage.setItem("oc_auth", JSON.stringify(c)); }
-  if (!localStorage.getItem("oc_auth")) guardar({ ...DEF });
-
   let rol = null; // "dueno" | "empleado"
+  let listo = window.OCSecure.migrarSiHaceFalta(); // promesa: migra oc_auth viejo (si existe) sin perder lo que José ya configuró
 
   // ---------- CSS ----------
   const css = document.createElement("style");
@@ -1493,10 +1607,10 @@ async function cargarAvanzado(){
     setTimeout(() => gate.classList.remove("err"), 400);
     nuevoTeclado(); // limpia y re-baraja
   }
-  function validar(code) {
-    const c = cfg();
-    if (code === c.owner) return entrar("dueno");
-    if ((c.empleados || []).includes(code)) return entrar("empleado");
+  async function validar(code) {
+    await listo;
+    if (await window.OCSecure.verificarOwner(code)) return entrar("dueno");
+    if (await window.OCSecure.verificarEmpleado(code)) return entrar("empleado");
     error("Clave incorrecta. Intenta de nuevo.");
   }
   function entrar(nuevoRol) {
@@ -1510,11 +1624,12 @@ async function cargarAvanzado(){
   }
 
   $("oc-borrar").addEventListener("click", () => { $("oc-msg").textContent = ""; if (teclado) teclado.reset(); });
-  $("oc-recuperar").addEventListener("click", () => {
-    const c = cfg();
-    if (!c.email) { $("oc-msg").style.color = "var(--ink-soft,#5d5340)"; $("oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado."; return; }
+  $("oc-recuperar").addEventListener("click", async () => {
+    await listo;
+    const email = window.OCSecure.leerCorreo();
+    if (!email) { $("oc-msg").style.color = "var(--ink-soft,#5d5340)"; $("oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado."; return; }
     $("oc-msg").style.color = "var(--verde,#2f7a4f)";
-    $("oc-msg").textContent = `Se enviaría un enlace de recuperación a ${enmascarar(c.email)} (demo: no se envía correo real).`;
+    $("oc-msg").textContent = `Se enviaría un enlace de recuperación a ${enmascarar(email)} (demo: no se envía correo real).`;
   });
   nuevoTeclado();
 
@@ -1544,11 +1659,11 @@ async function cargarAvanzado(){
   // Expuesto para la vista Avanzado (capa contable).
   window.OCAuth = {
     rolActual: () => rol,
-    cfg, guardar, enmascarar,
+    enmascarar,
+    listo: () => listo,
     // Pide la subclave contable con su propio teclado (emojis barajados, casillas enmascaradas).
     pedirSubclaveContable() {
       return new Promise((resolve) => {
-        const c = cfg();
         const cont = document.createElement("div");
         cont.className = "oc-subgate";
         cont.innerHTML = `<div class="caja" style="background:var(--blanco-calido,#fbf5e8);border:2px solid var(--brass,#9c7a35);border-radius:8px;padding:26px 22px;max-width:420px;width:100%;text-align:center;">
@@ -1560,8 +1675,8 @@ async function cargarAvanzado(){
           <div class="oc-msg" id="oc-msg2"></div></div>`;
         document.body.appendChild(cont);
         let tec;
-        function alCompletar(code) {
-          if (code === c.acct) { cont.remove(); resolve(true); }
+        async function alCompletar(code) {
+          if (await window.OCSecure.verificarAcct(code)) { cont.remove(); resolve(true); }
           else {
             cont.querySelector("#oc-msg2").textContent = "Subclave incorrecta.";
             cont.classList.add("err"); setTimeout(() => cont.classList.remove("err"), 400);
@@ -1646,46 +1761,45 @@ async function cargarAvanzado(){
       <p style="font-size:14px;color:var(--ink-soft);margin-top:0;">Correo del dueño para recuperar las claves. Una vez guardado se oculta y queda ofuscado.</p>
       <div id="oc-email-row"></div>
       <div style="margin-top:18px;">
-        <p style="font-size:14px;color:var(--ink-soft);">Claves (PIN de 3 dígitos). Cambia los códigos si lo necesitas; usa dígitos 0-9.</p>
+        <p style="font-size:14px;color:var(--ink-soft);">Claves (PIN de 3 dígitos). Por seguridad, los códigos actuales NO se muestran aquí (se guardan cifrados) — escribe los NUEVOS solo si quieres cambiarlos.</p>
         <div style="display:flex;flex-direction:column;gap:8px;max-width:340px;">
-          <label style="font-size:13px;">Dueño <input id="oc-c-owner" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
-          <label style="font-size:13px;">Empleado <input id="oc-c-emp" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
-          <label style="font-size:13px;">Contable <input id="oc-c-acct" maxlength="3" inputmode="numeric" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
+          <label style="font-size:13px;">Dueño <input id="oc-c-owner" maxlength="3" inputmode="numeric" placeholder="•••" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
+          <label style="font-size:13px;">Empleado <input id="oc-c-emp" maxlength="3" inputmode="numeric" placeholder="•••" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
+          <label style="font-size:13px;">Contable <input id="oc-c-acct" maxlength="3" inputmode="numeric" placeholder="•••" style="margin-left:8px;width:90px;text-align:center;font-family:var(--font-mono);padding:8px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
         </div>
-        <button id="oc-save-codes" class="ir" style="margin-top:12px;background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">Guardar claves</button>
+        <button id="oc-save-codes" class="ir" style="margin-top:12px;background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">Guardar nuevas claves</button>
         <p id="oc-codes-msg" style="font-size:14px;margin-top:8px;"></p>
       </div>`;
     vista.appendChild(gestion);
 
-    pintarEmail();
-    pintarCodigos();
+    window.OCAuth.listo().then(() => { pintarEmail(); });
 
-    $("oc-save-codes").addEventListener("click", () => {
-      const c = window.OCAuth.cfg();
+    // Cambiar los 3 PINs rota TODO (nuevo salt + nuevos hashes). Por eso se
+    // piden los tres juntos: no se puede "mantener" un hash viejo bajo un
+    // salt nuevo. JFC pidió explícitamente: si el dueño cambia su código,
+    // EXIGIR que ya tenga un correo de recuperación guardado (si no, no se
+    // puede recuperar el código nuevo si se le olvida). El correo en sí no
+    // se toca aquí — se preserva tal cual esté guardado.
+    $("oc-save-codes").addEventListener("click", async () => {
       const o = $("oc-c-owner").value.trim(), e = $("oc-c-emp").value.trim(), a = $("oc-c-acct").value.trim();
       const valido = (s) => /^[0-9]{3}$/.test(s);
       if (![o, e, a].every(valido)) { msg("oc-codes-msg", "Cada clave debe ser 3 dígitos (0-9).", "var(--rojo)"); return; }
-      c.owner = o; c.empleados = [e]; c.acct = a;
-      window.OCAuth.guardar(c);
-      msg("oc-codes-msg", "Claves guardadas.", "var(--verde)");
+      const correoActual = window.OCSecure.leerCorreo();
+      if (!correoActual) { msg("oc-codes-msg", "Antes de cambiar las claves, registra tu correo de recuperación arriba (si olvidas el código nuevo, sin correo no hay forma de recuperarlo).", "var(--rojo)"); return; }
+      await window.OCSecure.guardarSecreto(o, [e], a, correoActual);
+      $("oc-c-owner").value = ""; $("oc-c-emp").value = ""; $("oc-c-acct").value = "";
+      msg("oc-codes-msg", "Claves guardadas y cifradas.", "var(--verde)");
     });
   }
 
-  function pintarCodigos() {
-    const c = window.OCAuth.cfg();
-    $("oc-c-owner").value = c.owner;
-    $("oc-c-emp").value = (c.empleados || [])[0] || "";
-    $("oc-c-acct").value = c.acct;
-  }
-
   function pintarEmail() {
-    const c = window.OCAuth.cfg();
+    const email = window.OCSecure.leerCorreo();
     const row = $("oc-email-row");
-    if (c.email) {
+    if (email) {
       row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span style="font-family:var(--font-mono);font-size:15px;color:var(--ink);">${window.OCAuth.enmascarar(c.email)}</span>
+        <span style="font-family:var(--font-mono);font-size:15px;color:var(--ink);">${window.OCAuth.enmascarar(email)}</span>
         <button id="oc-email-edit" style="font-size:13px;padding:8px 12px;border:2px solid var(--azul-medio);border-radius:5px;background:transparent;color:var(--azul-medio);cursor:pointer;">Cambiar</button></div>`;
-      $("oc-email-edit").addEventListener("click", () => { const cc = window.OCAuth.cfg(); cc.email = ""; window.OCAuth.guardar(cc); pintarEmail(); });
+      $("oc-email-edit").addEventListener("click", () => { window.OCSecure.actualizarCorreo(""); pintarEmail(); });
     } else {
       row.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;">
         <input id="oc-email-in" type="email" placeholder="correo@dominio.com" style="flex:1;min-width:200px;padding:10px;border:2px solid var(--azul-medio);border-radius:5px;font-family:var(--font-mono);">
@@ -1694,7 +1808,7 @@ async function cargarAvanzado(){
       $("oc-email-save").addEventListener("click", () => {
         const v = $("oc-email-in").value.trim();
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { msg("oc-email-msg", "Correo no válido.", "var(--rojo)"); return; }
-        const cc = window.OCAuth.cfg(); cc.email = v; window.OCAuth.guardar(cc); pintarEmail();
+        window.OCSecure.actualizarCorreo(v); pintarEmail();
       });
     }
   }

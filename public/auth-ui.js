@@ -21,6 +21,13 @@
 // Si en el futuro JFC quiere que la clave se ingrese por emojis en vez de por
 // dígitos, el cambio es: mapear cada emoji tocado a su dígito subyacente. Hoy
 // se ingresa por dígito (lo pidió explícitamente: "agrega dígitos").
+//
+// SEGURIDAD DE LOS PINS (crypto-store.js, cargar ANTES que este archivo):
+//   Los 3 PINs (dueño, empleado(s), subclave contable) ya NO viven en texto
+//   plano en localStorage. Se validan contra hashes PBKDF2 vía window.OCSecure
+//   — ver crypto-store.js para el detalle. Este archivo solo orquesta la UI y
+//   llama a OCSecure para verificar/guardar; nunca compara strings de PIN
+//   directamente.
 // ===========================================================================
 (function () {
   // Pool de emojis de adorno. Se barajan; ninguno está atado a un dígito fijo.
@@ -40,17 +47,8 @@
     return a;
   }
 
-  // --- Claves por defecto (el dueño puede cambiarlas en Avanzado) ---
-  // owner = clave del dueño · empleados[] = subclaves de empleado · acct = subclave contable
-  const DEF = { owner: "159", empleados: ["260"], acct: "357", email: "" };
-  function cfg() {
-    try { return JSON.parse(localStorage.getItem("oc_auth") || "null") || { ...DEF }; }
-    catch { return { ...DEF }; }
-  }
-  function guardar(c) { localStorage.setItem("oc_auth", JSON.stringify(c)); }
-  if (!localStorage.getItem("oc_auth")) guardar({ ...DEF });
-
   let rol = null; // "dueno" | "empleado"
+  let listo = window.OCSecure.migrarSiHaceFalta(); // promesa: migra oc_auth viejo (si existe) sin perder lo que José ya configuró
 
   // ---------- CSS ----------
   const css = document.createElement("style");
@@ -163,10 +161,10 @@
     setTimeout(() => gate.classList.remove("err"), 400);
     nuevoTeclado(); // limpia y re-baraja
   }
-  function validar(code) {
-    const c = cfg();
-    if (code === c.owner) return entrar("dueno");
-    if ((c.empleados || []).includes(code)) return entrar("empleado");
+  async function validar(code) {
+    await listo;
+    if (await window.OCSecure.verificarOwner(code)) return entrar("dueno");
+    if (await window.OCSecure.verificarEmpleado(code)) return entrar("empleado");
     error("Clave incorrecta. Intenta de nuevo.");
   }
   function entrar(nuevoRol) {
@@ -180,11 +178,12 @@
   }
 
   $("oc-borrar").addEventListener("click", () => { $("oc-msg").textContent = ""; if (teclado) teclado.reset(); });
-  $("oc-recuperar").addEventListener("click", () => {
-    const c = cfg();
-    if (!c.email) { $("oc-msg").style.color = "var(--ink-soft,#5d5340)"; $("oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado."; return; }
+  $("oc-recuperar").addEventListener("click", async () => {
+    await listo;
+    const email = window.OCSecure.leerCorreo();
+    if (!email) { $("oc-msg").style.color = "var(--ink-soft,#5d5340)"; $("oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado."; return; }
     $("oc-msg").style.color = "var(--verde,#2f7a4f)";
-    $("oc-msg").textContent = `Se enviaría un enlace de recuperación a ${enmascarar(c.email)} (demo: no se envía correo real).`;
+    $("oc-msg").textContent = `Se enviaría un enlace de recuperación a ${enmascarar(email)} (demo: no se envía correo real).`;
   });
   nuevoTeclado();
 
@@ -214,11 +213,11 @@
   // Expuesto para la vista Avanzado (capa contable).
   window.OCAuth = {
     rolActual: () => rol,
-    cfg, guardar, enmascarar,
+    enmascarar,
+    listo: () => listo,
     // Pide la subclave contable con su propio teclado (emojis barajados, casillas enmascaradas).
     pedirSubclaveContable() {
       return new Promise((resolve) => {
-        const c = cfg();
         const cont = document.createElement("div");
         cont.className = "oc-subgate";
         cont.innerHTML = `<div class="caja" style="background:var(--blanco-calido,#fbf5e8);border:2px solid var(--brass,#9c7a35);border-radius:8px;padding:26px 22px;max-width:420px;width:100%;text-align:center;">
@@ -230,8 +229,8 @@
           <div class="oc-msg" id="oc-msg2"></div></div>`;
         document.body.appendChild(cont);
         let tec;
-        function alCompletar(code) {
-          if (code === c.acct) { cont.remove(); resolve(true); }
+        async function alCompletar(code) {
+          if (await window.OCSecure.verificarAcct(code)) { cont.remove(); resolve(true); }
           else {
             cont.querySelector("#oc-msg2").textContent = "Subclave incorrecta.";
             cont.classList.add("err"); setTimeout(() => cont.classList.remove("err"), 400);
