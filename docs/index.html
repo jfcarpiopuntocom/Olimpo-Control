@@ -256,8 +256,10 @@
   .vista{display:none;}
   .vista.activa{display:block; animation:vistaEntra .32s cubic-bezier(.22,.8,.32,1);}
   @keyframes vistaEntra{
-    from{ opacity:0; transform:translateY(8px); }
-    to{ opacity:1; transform:translateY(0); }
+    /* Solo transform — NUNCA opacity: el contenido debe ser visible aunque
+       la animacion no corra (regla IN STONE de JFC, contenido visible x default). */
+    from{ transform:translateY(8px); }
+    to{ transform:translateY(0); }
   }
 
   /* ================= HERO SEMÁFORO ================= */
@@ -744,7 +746,13 @@
   }
 
   /* ---------- SPLASH breve de arranque (marca ~0.8s y se desvanece) ---------- */
-  #oc-splash{position:fixed;inset:0;background:var(--azul-oscuro);display:flex;align-items:center;justify-content:center;z-index:999;transition:opacity .45s ease;}
+  #oc-splash{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--azul-oscuro);display:flex;align-items:center;justify-content:center;z-index:999;transition:opacity .45s ease;
+    /* pointer-events:none SIEMPRE: es decorativo, jamas debe bloquear taps.
+       La animacion CSS con forwards lo oculta AUNQUE el JS falle (red de
+       seguridad para Safari/iOS): no depende de nadie para quitarse. */
+    pointer-events:none;
+    animation:ocSplashOut .45s ease 1.15s forwards;}
+  @keyframes ocSplashOut{ to{ opacity:0; visibility:hidden; } }
   #oc-splash span{font-family:var(--font-serif);font-style:italic;font-size:46px;color:#fbf6ea;-webkit-text-fill-color:#fbf6ea;letter-spacing:0.01em;}
   #oc-splash.fuera{opacity:0;pointer-events:none;}
   /* ---------- Landscape en telefonos: compactar header/hero para aprovechar alto ---------- */
