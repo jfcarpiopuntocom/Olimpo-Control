@@ -3,7 +3,7 @@
 Backend Express que envuelve Loyverse con una capa visual/pedagógica. Cero
 infraestructura nueva: un solo proceso Node.
 
-## Para José: activar tu cuenta real de Loyverse (3 pasos)
+## Para Jose: activar tu cuenta real de Loyverse (3 pasos)
 
 1. Entra al Back Office de Loyverse: https://r.loyverse.com → **Settings → Access Tokens**
 2. Click **"+ Add access token"**, ponle nombre "Olimpo Control" y guarda.
@@ -33,7 +33,7 @@ arrancó: `modo: loyverse` o `modo: demo`.
 2. En Render/Railway: "New Web Service" → conecta el repo.
    - Build command: `npm install`
    - Start command: `npm start`
-   - Variable de entorno: `LOYVERSE_TOKEN` = el token de José (en el panel del
+   - Variable de entorno: `LOYVERSE_TOKEN` = el token de Jose (en el panel del
      hosting, **nunca** en el código ni en `.env` subido a GitHub).
 3. Listo. No hay base de datos que migrar ni disco persistente que configurar
    para el catálogo/inventario/ventas — todo eso vive en Loyverse. Lo único
@@ -82,12 +82,12 @@ arrancó: `modo: loyverse` o `modo: demo`.
 - **"Hoy"** se calcula en zona horaria `America/Guayaquil`, no en la del
   servidor — así no se desfasa si despliegas en EE.UU. o Europa.
 
-## Antes de usarlo con la cuenta real de José — verificación pendiente
+## Antes de usarlo con la cuenta real de Jose — verificación pendiente
 
 La integración está construida sobre la documentación pública conocida de la
 API de Loyverse (`/v1.0/stores`, `/items`, `/inventory`, `/receipts`,
 `/suppliers`), pero **no se ha probado todavía contra una cuenta real** — los
 nombres exactos de algunos campos (variantes, proveedores) pueden variar
-según el plan de Loyverse de José. La primera conexión real (`GET
+según el plan de Loyverse de Jose. La primera conexión real (`GET
 /api/modo` debe responder `"loyverse"`, y `/api/ubicaciones` debe mostrar sus
 tiendas reales) debe revisarse antes de operar con ella en producción.

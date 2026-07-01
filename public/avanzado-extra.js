@@ -9,6 +9,12 @@
 
   function ubic() { const s = $("selectUbicacion"); return s ? s.value : "todas"; }
   const money = (n) => "$" + Number(n || 0).toFixed(2);
+  // Distingue "primer registro libre de correo" (no dispara nada más) de
+  // "re-registro tras código maestro" (SÍ debe encadenar directo a poner un
+  // PIN nuevo — JFC, 2026-07-01: "hagamos que puedan cambiar la clave,
+  // falta ese detallito"). Sin esta bandera, pintarEmail() no puede saber
+  // por qué camino llegó a mostrar el formulario de correo vacío.
+  let reasignacionViaMaestro = false;
 
   function init() {
     const vista = $("vista-avanzado");
@@ -131,31 +137,13 @@
         msg("oc-loy-msg", r.mensaje, "var(--verde)");
       });
 
-      // --- Reseteo maestro: SOLO JFC conoce esta clave. No confundir con la
-      // subclave contable ni con el código maestro del correo — este vive
-      // 100% del lado del servidor (nunca en el JS que el navegador puede
-      // leer), es la última salida si un dueño queda bloqueado por completo.
-      const master = document.createElement("div");
-      master.className = "panel-escaner tag-card";
-      master.style.cssText = "text-align:left;margin-top:22px;border-color:var(--rust);";
-      master.innerHTML = `
-        <h3 class="seccion" style="margin-top:0;color:var(--rust);">Zona de reseteo maestro</h3>
-        <p style="font-size:14px;color:var(--ink-soft);margin-top:0;">Reservado. Borra la conexión de Loyverse guardada y limpia el acceso local (claves y correo) para empezar de cero.</p>
-        <input id="oc-master-clave" type="password" placeholder="Clave maestra" style="width:160px;padding:10px;border:2px solid var(--rust);border-radius:5px;font-family:var(--font-mono);text-align:center;">
-        <button id="oc-master-ir" class="ir" style="margin-top:10px;background:var(--rust);color:var(--blanco-calido);border-color:var(--rust-deep);">Ejecutar reseteo</button>
-        <p id="oc-master-msg" style="font-size:14px;margin-top:8px;font-weight:700;"></p>
-      `;
-      vista.appendChild(master);
-
-      $("oc-master-ir").addEventListener("click", async () => {
-        const clave = $("oc-master-clave").value.trim();
-        if (!confirm("Esto borra la conexión de Loyverse y el acceso local guardado. ¿Continuar?")) return;
-        const res = await fetch(`${API}/config/reset-maestro`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave }) });
-        const r = await res.json();
-        if (!res.ok) { msg("oc-master-msg", r.error, "var(--rojo)"); return; }
-        if (r.limpiarLocalStorage) localStorage.removeItem("oc_secure");
-        msg("oc-master-msg", r.mensaje, "var(--verde)");
-      });
+      // NOTA (JFC, 2026-07-01): el reseteo maestro de 777 NO tiene interfaz
+      // aquí a propósito — "no le aparece a Jose ni a los clientes". Vive
+      // SOLO en el servidor (POST /api/config/reset-maestro en server.js),
+      // JFC lo dispara él mismo directo a la API cuando de verdad hace
+      // falta (dueño totalmente bloqueado). No poner un botón acá, NUNCA,
+      // aunque parezca conveniente para "probarlo rápido" — ese es
+      // exactamente el tipo de exposición que este diseño evita.
     }
 
     window.OCAuth.listo().then(() => { pintarEmail(); });
@@ -209,6 +197,15 @@
       } catch (err) { msg("oc-respaldo-msg", "No se pudo importar: " + err.message, "var(--rojo)"); }
       e.target.value = "";
     });
+
+    // Versión + stack, al fondo de todo Avanzado (JFC, 2026-07-01: "la
+    // versión va al fondo junto al stack de tech... al fondo de avanzados
+    // mejor aún"). Se agrega último a propósito para que quede debajo de
+    // gestión y Loyverse, no arriba.
+    const version = document.createElement("p");
+    version.style.cssText = "font-size:13px;color:var(--ink-soft,#5d5340);text-align:center;margin-top:30px;line-height:1.6;";
+    version.innerHTML = "Olimpo Control 1.0 — Node.js · Express · WebCrypto AES-256-GCM · PBKDF2 (150k it.) · Code128 · QR · arquitectura de cifrado end-to-end inspirada en nostr, sin servidor central de identidad<br><em>desarrollado por The Real Urban Shaman para Olimpo Club - 2026</em>";
+    vista.appendChild(version);
   }
 
   // Cambiar un correo YA registrado exige el código maestro (solo JFC lo
@@ -232,7 +229,16 @@
       $("oc-email-save").addEventListener("click", () => {
         const v = $("oc-email-in").value.trim();
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { msg("oc-email-msg", "Correo no válido.", "var(--rojo)"); return; }
-        window.OCSecure.actualizarCorreo(v); pintarEmail();
+        window.OCSecure.actualizarCorreo(v);
+        pintarEmail();
+        // El detalle que faltaba: si este correo se registró DESPUÉS de
+        // verificar el código maestro (dueño bloqueado, JFC ayudándolo),
+        // seguimos de una vez al flujo de "pon tu PIN nuevo" — no lo dejamos
+        // con el correo cambiado pero sin forma de entrar todavía.
+        if (reasignacionViaMaestro) {
+          reasignacionViaMaestro = false;
+          window.OCAuth.abrirFlujoReset(v);
+        }
       });
     }
   }
@@ -259,6 +265,7 @@
       const ok = await window.OCSecure.verificarMaestro(codigo);
       if (!ok) { cont.querySelector("#mst-msg").textContent = "Código maestro incorrecto."; return; }
       window.OCSecure.actualizarCorreo("");
+      reasignacionViaMaestro = true;
       cont.remove();
       pintarEmail();
     });

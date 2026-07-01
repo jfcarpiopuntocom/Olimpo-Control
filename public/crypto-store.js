@@ -82,7 +82,7 @@ const MASTER_CODE_DEFAULT = "OLIMPO-MAESTRO-2026";
   function randSalt() { return b64(crypto.getRandomValues(new Uint8Array(16))); }
 
   // ---- migración silenciosa desde el formato viejo en texto plano (oc_auth) ----
-  // Si José ya había configurado sus claves/correo antes de este cambio, NO se
+  // Si Jose ya había configurado sus claves/correo antes de este cambio, NO se
   // pierden ni se resetean: se migran tal cual a oc_secure en el primer load.
   async function migrarSiHaceFalta() {
     if (localStorage.getItem("oc_secure")) return;

@@ -286,7 +286,7 @@ app.post("/api/respaldo/importar", (req, res) => {
   res.json({ ok: true });
 });
 
-// --- Conectar Loyverse (JFC 2026-07-01: "que José tome total control") ---
+// --- Conectar Loyverse (JFC 2026-07-01: "que Jose tome total control") ---
 // El dueño pega su Access Token de Loyverse aquí mismo, sin tocar consola ni
 // archivos .env. Requiere reiniciar el servidor para activarse de verdad
 // (MODO_LOYVERSE en data.js se fija una sola vez al arrancar el proceso) —

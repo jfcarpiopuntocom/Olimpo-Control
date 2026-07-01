@@ -3,10 +3,10 @@
 // (datos de demo locales) en su lugar — así el proyecto sigue funcionando
 // sin token para seguir desarrollando/mostrando la UI.
 //
-// DOS formas de configurar el token (JFC, 2026-07-01 — "que José tome total
+// DOS formas de configurar el token (JFC, 2026-07-01 — "que Jose tome total
 // control"): (a) variable de entorno LOYVERSE_TOKEN (para quien despliega
 // vía hosting con env vars), o (b) un archivo local data/loyverse-token.json
-// que José mismo escribe desde Avanzado → "Conectar Loyverse" en la app,
+// que Jose mismo escribe desde Avanzado → "Conectar Loyverse" en la app,
 // sin tocar código ni consola. El archivo gana si ambos existen (es la ruta
 // pensada para el dueño real, no para el desarrollador). Cualquiera de las
 // dos requiere REINICIAR el servidor para tomar efecto — MODO_LOYVERSE en

@@ -48,7 +48,7 @@
   }
 
   let rol = null; // "dueno" | "empleado"
-  let listo = window.OCSecure.migrarSiHaceFalta(); // promesa: migra oc_auth viejo (si existe) sin perder lo que José ya configuró
+  let listo = window.OCSecure.migrarSiHaceFalta(); // promesa: migra oc_auth viejo (si existe) sin perder lo que Jose ya configuró
 
   // ---------------------------------------------------------------------------
   // BLOQUEO POR FUERZA BRUTA (tronco 1 del árbol de problemas, JFC 2026-06-30)
@@ -372,6 +372,10 @@
     rolActual: () => rol,
     enmascarar,
     listo: () => listo,
+    // Expuesto para avanzado-extra.js: tras reasignar el correo con el
+    // código maestro, se encadena directo aquí para que el dueño ponga su
+    // PIN nuevo en el mismo momento (JFC, 2026-07-01: "falta ese detallito").
+    abrirFlujoReset,
     // Pide la subclave contable con su propio teclado (emojis barajados, casillas enmascaradas).
     pedirSubclaveContable() {
       return new Promise((resolve) => {

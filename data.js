@@ -102,7 +102,7 @@ if (MODO_LOYVERSE) {
     // verdad del inventario en este modo); acá solo se lee y refleja. Si en
     // el futuro se quiere crear desde Olimpo Control, hay que llamar al
     // endpoint de creación de items de la API de Loyverse — no implementado
-    // todavía porque José aún no ha conectado su cuenta real.
+    // todavía porque Jose aún no ha conectado su cuenta real.
     async crearProducto() {
       return { error: "Con Loyverse conectado, da de alta productos nuevos directamente en Loyverse — Olimpo Control los reflejará automáticamente." };
     },
@@ -129,7 +129,7 @@ if (MODO_LOYVERSE) {
     // STOCK (sí lo hacemos, vía ajustarStock), pero el registro de venta en
     // los reportes de Loyverse mismo (su propio dashboard) NO se puede
     // anular desde aquí — Loyverse no expone un endpoint de "anular venta"
-    // en su API pública. Si José necesita eso, tendría que anularla también
+    // en su API pública. Si Jose necesita eso, tendría que anularla también
     // dentro de Loyverse. Documentado, no oculto.
     async anularVenta(ventaId) {
       if (!ultimaVentaLoyverse || ultimaVentaLoyverse.ventaId !== ventaId) {
