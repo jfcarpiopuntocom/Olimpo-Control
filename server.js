@@ -10,7 +10,6 @@ const cors = require("cors");
 const QRCode = require("qrcode");
 const path = require("path");
 const data = require("./data");
-const umbrales = require("./umbrales");
 const { code128SVG } = require("./barcode");
 
 const app = express();
@@ -80,6 +79,7 @@ function toResumenInventario(p) {
   return {
     id: p.id, nombre: p.nombre, categoria: p.categoria, sku: p.sku, stockActual: p.stockActual, estado, mensaje,
     perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: dias,
+    umbralRojo: p.umbralRojo,
   };
 }
 
@@ -102,6 +102,7 @@ async function toFicha(p) {
     fechaCaducidad: p.fechaCaducidad || null,
     diasParaVencer: dias,
     metodoCosteo: p.metodoCosteo || "FIFO",
+    umbralRojo: p.umbralRojo,
   };
 }
 
@@ -196,13 +197,17 @@ app.post("/api/productos", asyncRoute(async (req, res) => {
   res.json(await toFicha(r));
 }));
 
-// --- Umbrales (puntos de reorden, editables por José/admin) ---
+// --- Umbral de reorden ("mínimo para notificar urgencia"), editable desde
+// la tab Inventario. BUG FIJADO 2026-07-01: este endpoint existía pero
+// ninguna pantalla lo llamaba (encontrado en /review); ver nota en data.js.
 app.post("/api/productos/:id/umbrales", asyncRoute(async (req, res) => {
-  const p = await data.getProducto(req.params.id);
-  if (!p) return res.status(404).json({ error: "Producto no encontrado." });
-  const variantId = p.variantId || p.id;
-  umbrales.set(variantId, { umbralRojo: req.body.umbralRojo, umbralAmarillo: req.body.umbralAmarillo });
-  res.json({ ok: true });
+  const umbralRojo = Number(req.body.umbralRojo);
+  if (!Number.isInteger(umbralRojo) || umbralRojo < 1) {
+    return res.status(400).json({ error: "El umbral debe ser un número entero de al menos 1." });
+  }
+  const r = await data.actualizarUmbrales(req.params.id, umbralRojo);
+  if (r.error) return res.status(404).json({ error: r.error });
+  res.json(await toFicha(r.producto));
 }));
 
 // --- Escanear ---

@@ -5,6 +5,7 @@
 const { randomUUID } = require("crypto");
 const db = require("./db");
 const loyverse = require("./loyverse");
+const umbrales = require("./umbrales");
 
 const MODO_LOYVERSE = loyverse.activo();
 let ultimaVentaLoyverse = null; // ver anularVenta() en modo Loyverse, más abajo
@@ -163,6 +164,18 @@ if (MODO_LOYVERSE) {
       return loyverse.getVentasHoy(ubicacionId, fechaISO);
     },
 
+    // BUG FIJADO (JFC, 2026-07-01): este endpoint existía en server.js desde
+    // hace rato pero ninguna pantalla lo llamaba — el umbral se podía LEER
+    // (loyverse.js lo aplica al traer productos) pero nunca se podía GUARDAR
+    // desde la app. En modo Loyverse el umbral vive en umbrales.json (fuera
+    // de Loyverse, que no expone esto de forma consistente entre planes).
+    async actualizarUmbrales(id, umbralRojo) {
+      const p = await this.getProducto(id);
+      if (!p) return { error: "Producto no encontrado." };
+      umbrales.set(p.variantId || id, { umbralRojo, umbralAmarillo: umbralRojo * 2 });
+      return { producto: await this.getProducto(id) };
+    },
+
     getActividad,
     getGastosMensuales,
     setGastosMensuales,
@@ -289,6 +302,16 @@ if (MODO_LOYVERSE) {
         stockResultante: nuevoStock,
         ubicacion: nombreUbicacionLocal(p.ubicacionId),
       });
+      return { producto: db.get("productos").find({ id }).value() };
+    },
+
+    // BUG FIJADO (JFC, 2026-07-01): en modo demo el producto guarda su
+    // propio umbralRojo/umbralAmarillo directamente (no hay Loyverse de por
+    // medio), así que aquí se edita el producto mismo, no umbrales.json.
+    async actualizarUmbrales(id, umbralRojo) {
+      const p = db.get("productos").find({ id }).value();
+      if (!p) return { error: "Producto no encontrado." };
+      db.get("productos").find({ id }).assign({ umbralRojo, umbralAmarillo: umbralRojo * 2 }).write();
       return { producto: db.get("productos").find({ id }).value() };
     },
 

@@ -110,8 +110,7 @@
   #oc-logout{font-family:var(--font-display,sans-serif);font-size:13px;padding:8px 12px;border-radius:5px;
     border:2px solid var(--brass,#9c7a35);background:transparent;color:var(--blanco-calido,#fbf5e8);
     cursor:pointer;text-transform:uppercase;}
-  body.rol-empleado nav button[data-vista="avanzado"],
-  body.rol-empleado nav button[data-vista="actividad"]{display:none!important;}
+  body.rol-empleado nav button[data-vista="avanzado"]{display:none!important;}
   #oc-acct-lock{text-align:center;padding:22px;}
   #oc-acct-lock button{font-family:var(--font-display,sans-serif);font-size:14px;padding:12px 20px;
     border-radius:6px;border:2px solid var(--rust,#b2461f);background:var(--rust,#b2461f);

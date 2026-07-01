@@ -694,10 +694,6 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.2V5a1 1 0 0 1 1-1h6.2L21 14.8 13.8 22 3 11.2z"></path><circle cx="7.6" cy="7.6" r="1.3" fill="currentColor" stroke="none"></circle></svg>
     <span>Etiquetas</span>
   </button>
-  <button data-vista="actividad">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,12 7,12 10,5 14,19 17,12 22,12"></polyline></svg>
-    <span>Actividad</span>
-  </button>
   <button data-vista="avanzado">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2.5v3.4M12 18.1v3.4M3.6 6l2.4 2.4M18 15.6l2.4 2.4M3.6 18l2.4-2.4M18 8.4l2.4-2.4M2.5 12h3.4M18.1 12h3.4"></path></svg>
     <span>Avanzado</span>
@@ -777,12 +773,6 @@
     <div class="grid-etiquetas" id="gridEtiquetas"></div>
   </section>
 
-  <!-- VISTA: ACTIVIDAD -->
-  <section id="vista-actividad" class="vista">
-    <h3 class="seccion" style="margin-top:0;">Actividad reciente</h3>
-    <div id="listaActividad"></div>
-  </section>
-
   <!-- VISTA: AVANZADO -->
   <section id="vista-avanzado" class="vista">
     <h3 class="seccion" style="margin-top:0;">Modo avanzado</h3>
@@ -790,10 +780,16 @@
       Esta sección es para el contador, el administrador o quien quiera ver el detalle técnico. José no la necesita para operar el día a día.
     </div>
 
-    <h3 class="seccion" style="margin-top:0;">Gastos mensuales</h3>
+    <!-- Actividad ya no tiene botón propio en el nav (ocupaba espacio) —
+         vive aquí, es historial operativo, no algo que se consulte tan
+         seguido como Hoy o Escanear. -->
+    <h3 class="seccion" style="margin-top:0;">Actividad reciente</h3>
+    <div id="listaActividad" class="tag-card" style="text-align:left;max-height:280px;overflow-y:auto;"></div>
+
+    <h3 class="seccion">Gastos mensuales</h3>
     <div class="panel-escaner tag-card" style="text-align:left;">
       <p>
-        Arriendo, luz, sueldos, internet, etc. Ingresa el total mensual de la ubicación seleccionada arriba. Se reparte entre 30 para estimar el gasto operativo del día en el P&amp;G.
+        Arriendo, luz, sueldos, internet, etc. Ingresa el total mensual de la ubicación seleccionada arriba. Se reparte entre los días reales del mes para estimar el gasto operativo del día en el P&amp;G.
       </p>
       <input id="inputGastosMensuales" type="number" min="0" step="0.01" placeholder="Ej: 350.00" style="text-align:left; max-width:220px;">
       <br>
@@ -984,7 +980,7 @@
       }
 
       if (path === "/api/productos" && (!opts || opts.method !== "POST")) {
-        let lista = filtrar(uid).map((p) => { const e = estadoDe(p); return { id: p.id, nombre: p.nombre, categoria: p.categoria, sku: p.sku, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, precio: p.precio, perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: e.dias }; });
+        let lista = filtrar(uid).map((p) => { const e = estadoDe(p); return { id: p.id, nombre: p.nombre, categoria: p.categoria, sku: p.sku, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, precio: p.precio, perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: e.dias, umbralRojo: p.umbralRojo }; });
         const est = q.get("estado");
         if (est) lista = lista.filter((x) => x.estado === est);
         lista.sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado] || a.nombre.localeCompare(b.nombre, "es"));
@@ -1059,6 +1055,15 @@
       }
 
       if (path === "/api/actividad") return J(movimientos.slice().reverse().slice(0, 100));
+
+      if ((m = path.match(/^\/api\/productos\/([^/]+)\/umbrales$/))) {
+        const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);
+        const umbralRojo = Number(body.umbralRojo);
+        if (!Number.isInteger(umbralRojo) || umbralRojo < 1) return J({ error: "El umbral debe ser un número entero de al menos 1." }, 400);
+        p.umbralRojo = umbralRojo;
+        p.umbralAmarillo = umbralRojo * 2;
+        return J(ficha(p));
+      }
 
       if (path === "/api/respaldo/exportar") {
         return J({ modo: "demo-estatico", ubicaciones, productos, ventas, movimientos, configuracion: { gastosMensuales } });
@@ -1150,7 +1155,7 @@ function vistaActivaId(){
 
 function refrescarVistaActiva(){
   const v = vistaActivaId();
-  const cargadores = { hoy: cargarHoy, inventario: cargarInventario, etiquetas: cargarEtiquetas, actividad: cargarActividad, avanzado: cargarAvanzado };
+  const cargadores = { hoy: cargarHoy, inventario: cargarInventario, etiquetas: cargarEtiquetas, avanzado: cargarAvanzado };
   const fn = cargadores[v];
   if (fn) Promise.resolve(fn()).catch(err => console.error(`Error cargando vista "${v}":`, err));
 }
@@ -1226,13 +1231,36 @@ async function cargarInventario(){
     return;
   }
   grid.innerHTML = productos.map(p => `
-    <div class="caja tag-card ${p.estado}" onclick="abrirFichaDesdeInventario('${p.id}')">
-      <div class="nombre">${p.nombre}${p.perecible ? ' 🕓' : ''}</div>
-      <div class="detalle">${p.categoria} · ${p.sku}</div>
-      <div class="stock">${p.stockActual}</div>
-      <div class="detalle">${p.mensaje}</div>
+    <div class="caja tag-card ${p.estado}">
+      <div onclick="abrirFichaDesdeInventario('${p.id}')" style="cursor:pointer;">
+        <div class="nombre">${p.nombre}${p.perecible ? ' 🕓' : ''}</div>
+        <div class="detalle">${p.categoria} · ${p.sku}</div>
+        <div class="stock">${p.stockActual}</div>
+        <div class="detalle">${p.mensaje}</div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:6px;" onclick="event.stopPropagation()">
+        <label style="font-size:12px;color:var(--ink-soft,#5d5340);">Avisar cuando queden ≤
+          <input type="number" min="1" value="${p.umbralRojo}" data-umbral-input="${p.id}"
+            style="width:48px;text-align:center;padding:4px;border:2px solid var(--azul-medio,#2c4a68);border-radius:5px;font-family:var(--font-mono,monospace);margin-left:4px;">
+        </label>
+        <button data-umbral-guardar="${p.id}" style="font-size:12px;padding:4px 8px;border:2px solid var(--verde,#2f7a4f);border-radius:5px;background:transparent;color:var(--verde,#2f7a4f);cursor:pointer;">Guardar</button>
+      </div>
     </div>
   `).join("");
+
+  grid.querySelectorAll("[data-umbral-guardar]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.umbralGuardar;
+      const input = grid.querySelector(`[data-umbral-input="${id}"]`);
+      const umbralRojo = Number(input.value);
+      const res = await fetch(`${API}/productos/${id}/umbrales`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ umbralRojo })
+      });
+      const r = await res.json();
+      if (!res.ok) { alert(r.error); return; }
+      cargarInventario();
+    });
+  });
 }
 
 async function abrirFichaDesdeInventario(id){
@@ -1634,6 +1662,7 @@ document.getElementById("btnGuardarGastos").addEventListener("click", async () =
 
 async function cargarAvanzado(){
   await cargarGastosMensuales();
+  await cargarActividad();
   const [pl, balance, valorizado] = await Promise.all([
     fetch(`${API}/reportes/pl?ubicacionId=${ubicacionActual}`).then(r => r.json()),
     fetch(`${API}/reportes/balance?ubicacionId=${ubicacionActual}`).then(r => r.json()),
