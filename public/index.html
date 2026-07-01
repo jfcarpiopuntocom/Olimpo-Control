@@ -1037,12 +1037,13 @@ function pintarFicha(p){
       ${p.perecible ? `<div class="linea"><strong>Vence:</strong> ${p.fechaCaducidad || "sin fecha"}${p.metodoCosteo ? ` · ${p.metodoCosteo}` : ""}</div>` : ""}
       <span class="badge-estado ${p.estado}">${p.mensaje}</span>
       <div class="acciones-rapidas">
-        <button class="vender" onclick="venderUno('${p.id}')">Vender 1</button>
+        <button class="vender" onclick="venderUno('${p.id}')" ${p.stockActual === 0 ? "disabled" : ""}>Vender 1</button>
         <button onclick="ajustar('${p.id}', 1)">+1 stock</button>
         <button onclick="ajustar('${p.id}', -1)">-1 stock</button>
         <button class="etiqueta" onclick="abrirEtiqueta('${p.id}')">Ver etiqueta</button>
       </div>
     </div>
+    <div id="oc-toast-venta"></div>
   `;
 }
 
@@ -1054,6 +1055,43 @@ async function venderUno(id){
   const data = await res.json();
   if (!res.ok){ alert(data.error); return; }
   pintarFicha(data.producto);
+  if (data.ventaId) mostrarToastAnular(data.ventaId, id);
+}
+
+// --- Deshacer venta (tronco 2, JFC 2026-06-30): toast de 5s con opción de
+// anular. Pasado ese tiempo la venta es definitiva — el toast simplemente
+// desaparece, no queda ningún rastro de "se puede anular" en la UI ni en el
+// backend (server.js ya rechaza anular() fuera de la ventana real). Evita
+// que el empleado tenga que llamar al dueño por un toque accidental de
+// "Vender 1".
+let toastVentaTimer = null;
+function mostrarToastAnular(ventaId, productoId){
+  const cont = document.getElementById("oc-toast-venta");
+  if (!cont) return;
+  clearTimeout(toastVentaTimer);
+  cont.innerHTML = `<div class="tag-card" style="position:fixed;left:16px;right:16px;bottom:calc(var(--nav-h,78px) + 16px);z-index:400;
+    background:var(--azul-oscuro,#1c3049);color:var(--blanco-calido,#fbf5e8);padding:14px 16px;border-radius:8px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;" id="oc-toast-anular">
+    <span>Venta registrada — toca aquí para anular</span>
+    <strong id="oc-toast-cuenta">5s</strong>
+  </div>`;
+  let restante = 5;
+  const el = document.getElementById("oc-toast-anular");
+  const cuenta = document.getElementById("oc-toast-cuenta");
+  const intervalo = setInterval(() => {
+    restante -= 1;
+    if (cuenta) cuenta.textContent = restante + "s";
+    if (restante <= 0) { clearInterval(intervalo); cont.innerHTML = ""; }
+  }, 1000);
+  el.addEventListener("click", async () => {
+    clearInterval(intervalo);
+    cont.innerHTML = "";
+    const res = await fetch(`${API}/ventas/${ventaId}/anular`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok){ alert(data.error); return; }
+    pintarFicha(data.producto);
+  });
+  toastVentaTimer = setTimeout(() => { clearInterval(intervalo); cont.innerHTML = ""; }, 5000);
 }
 
 async function ajustar(id, delta){

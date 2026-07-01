@@ -214,6 +214,13 @@ app.post("/api/productos/:id/venta", asyncRoute(async (req, res) => {
   const cantidad = Number.isInteger(req.body.cantidad) && req.body.cantidad > 0 ? req.body.cantidad : 1;
   const r = await data.venderUno(req.params.id, cantidad);
   if (r.error) return res.status(400).json({ error: r.error });
+  res.json({ producto: await toFicha(r.producto), ventaId: r.ventaId });
+}));
+
+// --- Anular venta reciente (tronco 2: "deshacer", ventana de 5s en la UI) ---
+app.post("/api/ventas/:ventaId/anular", asyncRoute(async (req, res) => {
+  const r = await data.anularVenta(req.params.ventaId);
+  if (r.error) return res.status(400).json({ error: r.error });
   res.json({ producto: await toFicha(r.producto) });
 }));
 

@@ -138,8 +138,20 @@
         const cant = Number.isInteger(body.cantidad) && body.cantidad > 0 ? body.cantidad : 1;
         if (p.stockActual < cant) return J({ error: `No hay suficiente stock disponible (quedan ${p.stockActual}).` }, 400);
         p.stockActual -= cant;
-        ventas.push({ productoId: p.id, ubicacionId: p.ubicacionId, cantidad: cant, precioUnit: p.precio, costoUnit: p.costo, fecha: new Date().toISOString() });
+        const ventaId = String(Date.now() + Math.random());
+        ventas.push({ id: ventaId, productoId: p.id, ubicacionId: p.ubicacionId, cantidad: cant, precioUnit: p.precio, costoUnit: p.costo, fecha: new Date().toISOString() });
         mov("venta", { producto: p.nombre, cantidad: cant, total: +(p.precio * cant).toFixed(2), ubicacion: nombreUbic(p.ubicacionId) });
+        return J({ producto: ficha(p), ventaId });
+      }
+      if ((m = path.match(/^\/api\/ventas\/([^/]+)\/anular$/))) {
+        const idx = ventas.findIndex((v) => v.id === m[1]);
+        if (idx === -1) return J({ error: "Esta venta ya no se puede anular (pasó el tiempo o ya se anuló)." }, 400);
+        const venta = ventas[idx];
+        const p = productos.find((x) => x.id === venta.productoId);
+        if (!p) return J({ error: "Producto no encontrado." }, 404);
+        p.stockActual += venta.cantidad;
+        ventas.splice(idx, 1);
+        mov("anulacion", { producto: p.nombre, cantidad: venta.cantidad, ubicacion: nombreUbic(p.ubicacionId) });
         return J({ producto: ficha(p) });
       }
       if ((m = path.match(/^\/api\/productos\/([^/]+)\/ajustar$/))) {

@@ -7,6 +7,7 @@ const db = require("./db");
 const loyverse = require("./loyverse");
 
 const MODO_LOYVERSE = loyverse.activo();
+let ultimaVentaLoyverse = null; // ver anularVenta() en modo Loyverse, más abajo
 
 function registrarMovimiento(tipo, detalle) {
   db.get("movimientos").push({ id: randomUUID(), tipo, detalle, fecha: new Date().toISOString() }).write();
@@ -82,7 +83,29 @@ if (MODO_LOYVERSE) {
         total: Number((p.precio * cantidad).toFixed(2)),
         ubicacion: await this.nombreUbicacion(p.ubicacionId),
       });
-      return { producto: await this.getProducto(id) };
+      // ventaId propio (no de Loyverse) — solo sirve para la ventana de
+      // "deshacer" de 5s en esta sesión. Ver limitación en anularVenta().
+      ultimaVentaLoyverse = { ventaId: randomUUID(), productoId: id, cantidad };
+      return { producto: await this.getProducto(id), ventaId: ultimaVentaLoyverse.ventaId };
+    },
+
+    // LIMITACIÓN CONOCIDA en modo Loyverse: podemos revertir el AJUSTE DE
+    // STOCK (sí lo hacemos, vía ajustarStock), pero el registro de venta en
+    // los reportes de Loyverse mismo (su propio dashboard) NO se puede
+    // anular desde aquí — Loyverse no expone un endpoint de "anular venta"
+    // en su API pública. Si José necesita eso, tendría que anularla también
+    // dentro de Loyverse. Documentado, no oculto.
+    async anularVenta(ventaId) {
+      if (!ultimaVentaLoyverse || ultimaVentaLoyverse.ventaId !== ventaId) {
+        return { error: "Esta venta ya no se puede anular (pasó el tiempo o ya se anuló)." };
+      }
+      const { productoId, cantidad } = ultimaVentaLoyverse;
+      ultimaVentaLoyverse = null;
+      const p = await this.getProducto(productoId);
+      if (!p) return { error: "Producto no encontrado." };
+      await loyverse.ajustarStock({ variantId: p.variantId, storeId: p.ubicacionId, delta: cantidad, motivo: "Anulación de venta (deshacer)" });
+      registrarMovimiento("anulacion", { producto: p.nombre, cantidad, ubicacion: await this.nombreUbicacion(p.ubicacionId) });
+      return { producto: await this.getProducto(productoId) };
     },
 
     async ajustar(id, delta, motivo) {
@@ -179,9 +202,10 @@ if (MODO_LOYVERSE) {
       if (!p) return { error: "Producto no encontrado." };
       if (p.stockActual < cantidad) return { error: `No hay suficiente stock disponible (quedan ${p.stockActual}).` };
 
+      const ventaId = randomUUID();
       db.get("productos").find({ id }).assign({ stockActual: p.stockActual - cantidad }).write();
       db.get("ventas")
-        .push({ id: randomUUID(), productoId: p.id, ubicacionId: p.ubicacionId, cantidad, precioUnit: p.precio, costoUnit: p.costo, fecha: new Date().toISOString() })
+        .push({ id: ventaId, productoId: p.id, ubicacionId: p.ubicacionId, cantidad, precioUnit: p.precio, costoUnit: p.costo, fecha: new Date().toISOString() })
         .write();
       registrarMovimiento("venta", {
         producto: p.nombre,
@@ -189,7 +213,29 @@ if (MODO_LOYVERSE) {
         total: Number((p.precio * cantidad).toFixed(2)),
         ubicacion: nombreUbicacionLocal(p.ubicacionId),
       });
-      return { producto: db.get("productos").find({ id }).value() };
+      return { producto: db.get("productos").find({ id }).value(), ventaId };
+    },
+
+    // Anula una venta reciente (tronco 2, JFC 2026-06-30: "botón de deshacer,
+    // 5 segundos"). A propósito ELIMINA el registro de venta en vez de dejarlo
+    // y agregar uno negativo: dentro de la ventana de 5s esto es corregir un
+    // toque accidental, no un reembolso formal — nunca debió contar como
+    // venta real, así que no debe aparecer en ningún reporte del día. Un
+    // reembolso posterior (fuera de esta ventana) es un caso distinto, no
+    // cubierto aquí, y necesitaría su propio registro contable.
+    async anularVenta(ventaId) {
+      const venta = db.get("ventas").find({ id: ventaId }).value();
+      if (!venta) return { error: "Esta venta ya no se puede anular (pasó el tiempo o ya se anuló)." };
+      const p = db.get("productos").find({ id: venta.productoId }).value();
+      if (!p) return { error: "Producto no encontrado." };
+      db.get("productos").find({ id: venta.productoId }).assign({ stockActual: p.stockActual + venta.cantidad }).write();
+      db.get("ventas").remove({ id: ventaId }).write();
+      registrarMovimiento("anulacion", {
+        producto: p.nombre,
+        cantidad: venta.cantidad,
+        ubicacion: nombreUbicacionLocal(venta.ubicacionId),
+      });
+      return { producto: db.get("productos").find({ id: venta.productoId }).value() };
     },
 
     async ajustar(id, delta, motivo) {
