@@ -3,6 +3,9 @@
 // /api/* y responde con la misma lógica que server.js, usando datos de
 // ejemplo en memoria. En el servidor real este archivo NO se carga.
 (function () {
+  // Marca global para que index.html sepa que corre sin backend real y NUNCA
+  // muestre un mensaje de "el servidor no responde" en la demo pública.
+  window.OC_DEMO = true;
   const ZONA = "America/Guayaquil";
   function hoyISO() {
     return new Intl.DateTimeFormat("en-CA", { timeZone: ZONA, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());

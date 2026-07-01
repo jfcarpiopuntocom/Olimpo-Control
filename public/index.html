@@ -1220,18 +1220,36 @@ async function cargarAvanzado(){
 }
 
 // --- Init ---
-(async function init(){
+// Reintenta una vez antes de rendirse: en la demo estática (GitHub Pages),
+// mock-backend.js se carga como script externo — en una red lenta puede que
+// no haya terminado de interceptar fetch() cuando init() arranca. Un solo
+// reintento tras 400ms cubre ese caso sin que el usuario note nada. Si el
+// segundo intento también falla, el mensaje NUNCA debe hablar de "server.js"
+// cuando esta build es la demo sin servidor (window.OC_DEMO, seteado por
+// mock-backend.js) — antes decía siempre lo mismo sin importar el modo, lo
+// cual asustaba y mentía en la demo pública.
+async function cargarDashboardInicial(intento){
   try{
     await cargarUbicaciones();
     await cargarHoy();
   }catch(err){
-    console.error("No se pudo conectar con el servidor:", err);
+    if (!intento) {
+      await new Promise((r) => setTimeout(r, 400));
+      return cargarDashboardInicial(1);
+    }
+    console.error("No se pudo cargar el panel inicial:", err);
     const hero = document.getElementById("heroSemaforo");
     hero.className = "hero-semaforo tag-card amarillo";
-    document.getElementById("heroTitulo").textContent = "No se pudo conectar con el servidor.";
-    document.getElementById("heroSubtitulo").textContent = "Verifica que el backend (server.js) esté corriendo y vuelve a cargar la página.";
+    if (window.OC_DEMO) {
+      document.getElementById("heroTitulo").textContent = "Cargando la demo…";
+      document.getElementById("heroSubtitulo").textContent = "Si esto no cambia en unos segundos, recarga la página.";
+    } else {
+      document.getElementById("heroTitulo").textContent = "No se pudo conectar con el servidor.";
+      document.getElementById("heroSubtitulo").textContent = "Verifica que el backend (server.js) esté corriendo y vuelve a cargar la página.";
+    }
   }
-})();
+}
+cargarDashboardInicial(0);
 </script>
 <script src="/crypto-store.js"></script>
 <script src="/auth-ui.js"></script>

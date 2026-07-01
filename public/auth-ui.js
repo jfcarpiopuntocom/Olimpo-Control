@@ -212,6 +212,7 @@
       rol = null; document.body.classList.remove("rol-empleado", "rol-dueno");
       $("oc-msg").textContent = ""; nuevoTeclado();
       gate.style.display = "flex"; b.remove();
+      window.dispatchEvent(new CustomEvent("oc-logout")); // avisa a help-ui.js (y a quien más le importe) para que oculte lo que solo debe verse logueado
     });
     header.appendChild(b);
   }

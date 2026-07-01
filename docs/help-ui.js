@@ -1,16 +1,17 @@
-// help-ui.js — Botón de ayuda (?) flotante. Contenido DISTINTO según el rol
-// activo (dueño vs empleado): el dueño necesita entender todo el sistema
-// (capa contable, claves, gastos); el empleado solo necesita lo operativo del
-// día a día (escanear, vender, leer el semáforo). Depende de auth-ui.js
-// (escucha el evento "oc-login" para saber qué rol mostrar).
+// help-ui.js — Enlace de ayuda "Ayuda(?)" bajo el botón Salir del header (NO
+// es un botón flotante estilo chat/WhatsApp — JFC lo pidió explícitamente
+// discreto, parte del header, no una burbuja llamativa). Contenido DISTINTO
+// según el rol activo (dueño vs empleado): el dueño necesita entender todo
+// el sistema (capa contable, claves, gastos); el empleado solo necesita lo
+// operativo del día a día (escanear, vender, leer el semáforo). Depende de
+// auth-ui.js (escucha el evento "oc-login" para saber qué rol mostrar y para
+// encontrar el botón #oc-logout, debajo del cual se inserta este enlace).
 (function () {
   const css = document.createElement("style");
   css.textContent = `
-  #oc-help-btn{position:fixed;right:16px;bottom:calc(var(--nav-h,78px) + 16px);z-index:500;
-    width:48px;height:48px;border-radius:50%;border:2px solid var(--azul-oscuro,#1c3049);
-    background:var(--gold,#e8a020);color:var(--azul-oscuro,#1c3049);font-family:var(--font-display,sans-serif);
-    font-weight:700;font-size:22px;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.35);}
-  #oc-help-btn:active{transform:scale(0.95);}
+  #oc-help-btn{display:none;margin-top:6px;background:none;border:none;
+    font-family:var(--font-display,sans-serif);font-size:13px;color:var(--blanco-calido,#fbf5e8);
+    text-decoration:underline;cursor:pointer;padding:4px;}
   #oc-help-modal{position:fixed;inset:0;z-index:9998;background:rgba(28,48,73,.85);
     display:none;align-items:flex-end;justify-content:center;padding:0;}
   #oc-help-modal.abierto{display:flex;}
@@ -44,7 +45,7 @@
     </ul>
     <h3>Etiquetas</h3>
     <li>Genera e imprime etiquetas con código de barras + QR para cada producto nuevo.</li>
-    <h3>Avanzado (solo tú lo ves)</h3>
+    <h3>Avanzado (candado aparte, solo tú puedes abrirlo)</h3>
     <ul>
       <li><b>Gastos mensuales</b>: arriendo, luz, sueldos. Se reparte entre 30 para estimar el gasto del día.</li>
       <li><b>Capa contable</b> (candado aparte): cuentas T, pérdidas y ganancias, balance e inventario valorizado. Pide tu subclave contable, distinta de tu clave de entrada.</li>
@@ -66,8 +67,6 @@
       <li><b>Ajustar</b>: si algo se rompió, se venció o contaste mal el stock, usa "Ajustar" y escribe el motivo — queda registrado con tu turno.</li>
       <li><b>Etiquetas</b>: si necesitas reimprimir una etiqueta perdida o dañada, la encuentras aquí por nombre o código.</li>
     </ul>
-    <h3>Lo que no necesitas</h3>
-    <p>Los reportes financieros y la configuración del negocio los maneja el dueño — no aparecen en tu vista, y está bien así: tu trabajo es vender bien y mantener el inventario al día.</p>
   `;
 
   const modal = document.createElement("div");
@@ -81,10 +80,7 @@
 
   const btn = document.createElement("button");
   btn.id = "oc-help-btn";
-  btn.textContent = "?";
-  btn.title = "Ayuda";
-  btn.style.display = "none"; // aparece solo tras iniciar sesión (ver oc-login)
-  document.body.appendChild(btn);
+  btn.textContent = "Ayuda (?)";
 
   function abrir() {
     const rol = window.OCAuth ? window.OCAuth.rolActual() : null;
@@ -95,5 +91,18 @@
   document.getElementById("oc-help-cerrar").addEventListener("click", () => modal.classList.remove("abierto"));
   modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("abierto"); });
 
-  window.addEventListener("oc-login", () => { btn.style.display = "flex"; btn.style.alignItems = "center"; btn.style.justifyContent = "center"; });
+  // Se inserta justo después de #oc-logout (creado por auth-ui.js al iniciar
+  // sesión) para que quede debajo del botón Salir en el header, no como
+  // elemento flotante encima del contenido.
+  window.addEventListener("oc-login", () => {
+    const logout = document.getElementById("oc-logout");
+    if (logout && logout.parentNode && !document.body.contains(btn)) {
+      logout.insertAdjacentElement("afterend", btn);
+    }
+    btn.style.display = "block";
+  });
+  window.addEventListener("oc-logout", () => {
+    btn.remove(); // vuelve a insertarse junto al próximo #oc-logout en el siguiente login
+    modal.classList.remove("abierto");
+  });
 })();
