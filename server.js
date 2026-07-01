@@ -11,6 +11,7 @@ const QRCode = require("qrcode");
 const path = require("path");
 const data = require("./data");
 const umbrales = require("./umbrales");
+const { code128SVG } = require("./barcode");
 
 const app = express();
 app.use(cors());
@@ -31,31 +32,53 @@ function hoyISO() {
 }
 
 // ---------- Helpers de negocio ----------
+// Días entre hoy (Ecuador) y una fecha "YYYY-MM-DD". Negativo = ya venció.
+function diasParaVencer(fechaCaducidad) {
+  if (!fechaCaducidad) return null;
+  const hoy = new Date(hoyISO() + "T00:00:00");
+  const venc = new Date(fechaCaducidad + "T00:00:00");
+  return Math.round((venc - hoy) / 86400000);
+}
+
+// El estado combina DOS señales independientes: nivel de stock (como antes)
+// y, si el producto es perecible, cercanía al vencimiento. Se toma la más
+// severa de las dos (un producto con stock sano pero por vencer sigue siendo
+// una alerta real). El campo `dias` viaja en la respuesta para que la UI
+// pueda mostrar "vence en 3 días" sin recalcular fechas en el navegador.
 function calcularEstado(p) {
   const margen = p.precio > 0 ? (p.precio - p.costo) / p.precio : 0;
+  const dias = p.perecible ? diasParaVencer(p.fechaCaducidad) : null;
 
-  if (p.stockActual <= 0) {
-    return { estado: "rojo", mensaje: "Sin stock — repón cuanto antes" };
-  }
-  if (p.stockActual <= p.umbralRojo) {
-    return { estado: "rojo", mensaje: `Quedan ${p.stockActual} — reponer urgente` };
-  }
-  if (p.stockActual <= p.umbralAmarillo) {
-    return { estado: "amarillo", mensaje: `Quedan ${p.stockActual} — revisar pronto` };
-  }
-  if (margen >= 0.5) {
-    return { estado: "azul", mensaje: "Buen margen — impúlsalo esta semana" };
-  }
-  return { estado: "verde", mensaje: "Stock saludable" };
+  let porStock;
+  if (p.stockActual <= 0) porStock = { estado: "rojo", mensaje: "Sin stock — repón cuanto antes" };
+  else if (p.stockActual <= p.umbralRojo) porStock = { estado: "rojo", mensaje: `Quedan ${p.stockActual} — reponer urgente` };
+  else if (p.stockActual <= p.umbralAmarillo) porStock = { estado: "amarillo", mensaje: `Quedan ${p.stockActual} — revisar pronto` };
+  else if (margen >= 0.5) porStock = { estado: "azul", mensaje: "Buen margen — impúlsalo esta semana" };
+  else porStock = { estado: "verde", mensaje: "Stock saludable" };
+
+  if (dias == null) return { ...porStock, dias };
+
+  let porVencimiento = null;
+  if (dias < 0) porVencimiento = { estado: "rojo", mensaje: `Venció hace ${Math.abs(dias)} día${Math.abs(dias) === 1 ? "" : "s"} — retíralo` };
+  else if (dias <= 3) porVencimiento = { estado: "rojo", mensaje: `Vence en ${dias} día${dias === 1 ? "" : "s"} — véndelo ya` };
+  else if (dias <= 7) porVencimiento = { estado: "amarillo", mensaje: `Vence en ${dias} días — véndelo primero` };
+
+  if (!porVencimiento) return { ...porStock, dias };
+  // La más severa de las dos gana (rojo > amarillo > azul > verde).
+  const masGrave = ORDEN_ESTADO[porVencimiento.estado] <= ORDEN_ESTADO[porStock.estado] ? porVencimiento : porStock;
+  return { ...masGrave, dias };
 }
 
 function toResumenInventario(p) {
-  const { estado, mensaje } = calcularEstado(p);
-  return { id: p.id, nombre: p.nombre, categoria: p.categoria, sku: p.sku, stockActual: p.stockActual, estado, mensaje };
+  const { estado, mensaje, dias } = calcularEstado(p);
+  return {
+    id: p.id, nombre: p.nombre, categoria: p.categoria, sku: p.sku, stockActual: p.stockActual, estado, mensaje,
+    perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: dias,
+  };
 }
 
 async function toFicha(p) {
-  const { estado, mensaje } = calcularEstado(p);
+  const { estado, mensaje, dias } = calcularEstado(p);
   return {
     id: p.id,
     nombre: p.nombre,
@@ -69,6 +92,10 @@ async function toFicha(p) {
     categoria: p.categoria,
     ubicacionId: p.ubicacionId,
     ubicacionNombre: await data.nombreUbicacion(p.ubicacionId),
+    perecible: !!p.perecible,
+    fechaCaducidad: p.fechaCaducidad || null,
+    diasParaVencer: dias,
+    metodoCosteo: p.metodoCosteo || "FIFO",
   };
 }
 
@@ -149,6 +176,20 @@ app.get("/api/productos/:id", asyncRoute(async (req, res) => {
   res.json(await toFicha(p));
 }));
 
+// --- Dar de alta un producto nuevo (típicamente tras escanear un código que
+// no existía). En modo Loyverse, data.crearProducto devuelve un error
+// explicando que el alta se hace en Loyverse — ver nota en data.js.
+app.post("/api/productos", asyncRoute(async (req, res) => {
+  const { nombre, barcode } = req.body;
+  if (!nombre || !barcode) return res.status(400).json({ error: "Falta el nombre o el código de barras." });
+  if (req.body.perecible && !req.body.fechaCaducidad) {
+    return res.status(400).json({ error: "Si el producto expira, indica su fecha de caducidad." });
+  }
+  const r = await data.crearProducto(req.body);
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json(await toFicha(r));
+}));
+
 // --- Umbrales (puntos de reorden, editables por José/admin) ---
 app.post("/api/productos/:id/umbrales", asyncRoute(async (req, res) => {
   const p = await data.getProducto(req.params.id);
@@ -185,7 +226,13 @@ app.post("/api/productos/:id/ajustar", asyncRoute(async (req, res) => {
   res.json(await toFicha(r.producto));
 }));
 
-// --- Etiqueta con QR ---
+// --- Etiqueta con barcode + QR combinados ---
+// Una sola etiqueta con AMBOS códigos: el barcode (Code128, escaneable por
+// cualquier lector láser barato de tienda) y el QR (abre la ficha completa
+// desde el celular: precio, stock, proveedor, vencimiento). Los dos se
+// generan 100% localmente sin llamar a ningún servicio externo — ver
+// barcode.js y la dependencia "qrcode" (ambos open source, sin costo, sin
+// límite de uso ni de por vida).
 app.get("/api/productos/:id/etiqueta", asyncRoute(async (req, res) => {
   const p = await data.getProducto(req.params.id);
   if (!p) return res.status(404).json({ error: "Producto no encontrado." });
@@ -193,9 +240,10 @@ app.get("/api/productos/:id/etiqueta", asyncRoute(async (req, res) => {
   try {
     const payload = JSON.stringify({ id: p.id, sku: p.sku, barcode: p.barcode });
     const qrDataUrl = await QRCode.toDataURL(payload, { margin: 1, width: 320 });
-    res.json({ producto: await toFicha(p), qrDataUrl });
+    const barcodeSvg = code128SVG(p.barcode, { width: 300, height: 80 });
+    res.json({ producto: await toFicha(p), qrDataUrl, barcodeSvg });
   } catch (err) {
-    res.status(500).json({ error: "No se pudo generar el código QR." });
+    res.status(500).json({ error: "No se pudo generar la etiqueta (revisa que el código de barras use solo caracteres ASCII imprimibles)." });
   }
 }));
 

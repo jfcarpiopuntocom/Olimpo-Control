@@ -23,12 +23,12 @@
     { id: "p06", nombre: "Lark Box 20", categoria: "Cigarrillos", sku: "LRK-BOX-20", barcode: "7501234567006", ubicacionId: "feria", precio: 4.0, costo: 2.9, stockActual: 24, umbralRojo: 10, umbralAmarillo: 18, proveedor: "Distribuidora Andina" },
     { id: "p07", nombre: "Puro Backwoods Original", categoria: "Puros", sku: "BWD-ORG-001", barcode: "7501234567007", ubicacionId: "feria", precio: 3.5, costo: 1.4, stockActual: 22, umbralRojo: 6, umbralAmarillo: 12, proveedor: "Importadora Sur" },
     { id: "p08", nombre: "Vaper Desechable Menta Hielo", categoria: "Vapes", sku: "VAP-MH-001", barcode: "7501234567008", ubicacionId: "feria", precio: 12.0, costo: 6.5, stockActual: 4, umbralRojo: 5, umbralAmarillo: 10, proveedor: "VapeCity EC" },
-    { id: "p09", nombre: "Agua Cielo 600ml", categoria: "Bebidas", sku: "AGU-600-001", barcode: "7501234567009", ubicacionId: "feria", precio: 0.8, costo: 0.45, stockActual: 60, umbralRojo: 12, umbralAmarillo: 24, proveedor: "Tía Distribución" },
+    { id: "p09", nombre: "Agua Cielo 600ml", categoria: "Bebidas", sku: "AGU-600-001", barcode: "7501234567009", ubicacionId: "feria", precio: 0.8, costo: 0.45, stockActual: 60, umbralRojo: 12, umbralAmarillo: 24, proveedor: "Tía Distribución", perecible: true, fechaCaducidad: "2026-09-15", metodoCosteo: "FIFO" },
     { id: "p10", nombre: "Encendedor Bic Surtido", categoria: "Accesorios", sku: "ENC-BIC-001", barcode: "7501234567010", ubicacionId: "feria", precio: 1.5, costo: 0.5, stockActual: 9, umbralRojo: 10, umbralAmarillo: 20, proveedor: "Importadora Sur" },
     { id: "p11", nombre: "Pielroja Cajetilla", categoria: "Cigarrillos", sku: "PRJ-CAJ-20", barcode: "7501234567011", ubicacionId: "terminal", precio: 3.75, costo: 2.7, stockActual: 30, umbralRojo: 10, umbralAmarillo: 18, proveedor: "Distribuidora Andina" },
     { id: "p12", nombre: "Chicle Trident Menta", categoria: "Snacks", sku: "TRI-MEN-001", barcode: "7501234567012", ubicacionId: "terminal", precio: 0.6, costo: 0.25, stockActual: 50, umbralRojo: 10, umbralAmarillo: 20, proveedor: "Tía Distribución" },
     { id: "p13", nombre: "Vaper Desechable Mango", categoria: "Vapes", sku: "VAP-MNG-001", barcode: "7501234567013", ubicacionId: "terminal", precio: 12.5, costo: 6.0, stockActual: 16, umbralRojo: 5, umbralAmarillo: 10, proveedor: "VapeCity EC" },
-    { id: "p14", nombre: "Café en Lata Listo", categoria: "Bebidas", sku: "CAF-LAT-001", barcode: "7501234567014", ubicacionId: "terminal", precio: 1.1, costo: 0.65, stockActual: 3, umbralRojo: 8, umbralAmarillo: 16, proveedor: "Tía Distribución" },
+    { id: "p14", nombre: "Café en Lata Listo", categoria: "Bebidas", sku: "CAF-LAT-001", barcode: "7501234567014", ubicacionId: "terminal", precio: 1.1, costo: 0.65, stockActual: 3, umbralRojo: 8, umbralAmarillo: 16, proveedor: "Tía Distribución", perecible: true, fechaCaducidad: "2026-07-10", metodoCosteo: "FIFO" },
     { id: "p15", nombre: "Filtros de Cartón Pack 50", categoria: "Accesorios", sku: "FIL-CRT-050", barcode: "7501234567015", ubicacionId: "terminal", precio: 1.0, costo: 0.35, stockActual: 28, umbralRojo: 8, umbralAmarillo: 15, proveedor: "Importadora Sur" },
   ];
 
@@ -38,15 +38,37 @@
   const ORDEN = { rojo: 0, amarillo: 1, azul: 2, verde: 3 };
 
   function nombreUbic(id) { const u = ubicaciones.find((x) => x.id === id); return u ? u.nombre : "Ubicación desconocida"; }
+  // Días para vencer (negativo = ya venció). Espejo de diasParaVencer() en server.js.
+  function diasParaVencer(fecha) {
+    if (!fecha) return null;
+    const hoy = new Date(hoyISO() + "T00:00:00");
+    const venc = new Date(fecha + "T00:00:00");
+    return Math.round((venc - hoy) / 86400000);
+  }
+  // Espejo de calcularEstado() en server.js: combina stock + vencimiento,
+  // se queda con la señal más grave de las dos.
   function estadoDe(p) {
     const margen = p.precio > 0 ? (p.precio - p.costo) / p.precio : 0;
-    if (p.stockActual <= 0) return { estado: "rojo", mensaje: "Sin stock — repón cuanto antes" };
-    if (p.stockActual <= p.umbralRojo) return { estado: "rojo", mensaje: `Quedan ${p.stockActual} — reponer urgente` };
-    if (p.stockActual <= p.umbralAmarillo) return { estado: "amarillo", mensaje: `Quedan ${p.stockActual} — revisar pronto` };
-    if (margen >= 0.5) return { estado: "azul", mensaje: "Buen margen — impúlsalo esta semana" };
-    return { estado: "verde", mensaje: "Stock saludable" };
+    const dias = p.perecible ? diasParaVencer(p.fechaCaducidad) : null;
+    let porStock;
+    if (p.stockActual <= 0) porStock = { estado: "rojo", mensaje: "Sin stock — repón cuanto antes" };
+    else if (p.stockActual <= p.umbralRojo) porStock = { estado: "rojo", mensaje: `Quedan ${p.stockActual} — reponer urgente` };
+    else if (p.stockActual <= p.umbralAmarillo) porStock = { estado: "amarillo", mensaje: `Quedan ${p.stockActual} — revisar pronto` };
+    else if (margen >= 0.5) porStock = { estado: "azul", mensaje: "Buen margen — impúlsalo esta semana" };
+    else porStock = { estado: "verde", mensaje: "Stock saludable" };
+    if (dias == null) return { ...porStock, dias };
+    let porVenc = null;
+    if (dias < 0) porVenc = { estado: "rojo", mensaje: `Venció hace ${Math.abs(dias)} día${Math.abs(dias) === 1 ? "" : "s"} — retíralo` };
+    else if (dias <= 3) porVenc = { estado: "rojo", mensaje: `Vence en ${dias} día${dias === 1 ? "" : "s"} — véndelo ya` };
+    else if (dias <= 7) porVenc = { estado: "amarillo", mensaje: `Vence en ${dias} días — véndelo primero` };
+    if (!porVenc) return { ...porStock, dias };
+    const masGrave = ORDEN[porVenc.estado] <= ORDEN[porStock.estado] ? porVenc : porStock;
+    return { ...masGrave, dias };
   }
-  function ficha(p) { const e = estadoDe(p); return { id: p.id, nombre: p.nombre, precio: p.precio, sku: p.sku, barcode: p.barcode, proveedor: p.proveedor, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, categoria: p.categoria, ubicacionId: p.ubicacionId, ubicacionNombre: nombreUbic(p.ubicacionId) }; }
+  function ficha(p) {
+    const e = estadoDe(p);
+    return { id: p.id, nombre: p.nombre, precio: p.precio, sku: p.sku, barcode: p.barcode, proveedor: p.proveedor, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, categoria: p.categoria, ubicacionId: p.ubicacionId, ubicacionNombre: nombreUbic(p.ubicacionId), perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: e.dias, metodoCosteo: p.metodoCosteo || "FIFO" };
+  }
   function filtrar(uid) { return !uid || uid === "todas" ? productos : productos.filter((p) => p.ubicacionId === uid); }
   function ventasHoyDe(uid) { return ventas.filter((v) => (!uid || uid === "todas" || v.ubicacionId === uid)); }
   function mov(tipo, detalle) { movimientos.push({ id: String(Date.now() + Math.random()), tipo, detalle, fecha: new Date().toISOString() }); }
@@ -83,12 +105,28 @@
         return J({ semaforoGeneral: sem, resumenDia: { entra: +entra.toFixed(2), sale: +sale.toFixed(2), gananciaHoy: +(entra - sale).toFixed(2), inventarioValorizado: +inv.toFixed(2), ventasCount: vh.length }, alertas });
       }
 
-      if (path === "/api/productos") {
-        let lista = filtrar(uid).map((p) => { const e = estadoDe(p); return { id: p.id, nombre: p.nombre, categoria: p.categoria, sku: p.sku, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, precio: p.precio }; });
+      if (path === "/api/productos" && (!opts || opts.method !== "POST")) {
+        let lista = filtrar(uid).map((p) => { const e = estadoDe(p); return { id: p.id, nombre: p.nombre, categoria: p.categoria, sku: p.sku, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, precio: p.precio, perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: e.dias }; });
         const est = q.get("estado");
         if (est) lista = lista.filter((x) => x.estado === est);
         lista.sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado] || a.nombre.localeCompare(b.nombre, "es"));
         return J(lista);
+      }
+
+      if (path === "/api/productos" && opts && opts.method === "POST") {
+        if (!body.nombre || !body.barcode) return J({ error: "Falta el nombre o el código de barras." }, 400);
+        if (body.perecible && !body.fechaCaducidad) return J({ error: "Si el producto expira, indica su fecha de caducidad." }, 400);
+        const nuevo = {
+          id: "p" + Math.random().toString(36).slice(2, 9), nombre: body.nombre, categoria: body.categoria || "General",
+          sku: body.sku || body.barcode, barcode: body.barcode, ubicacionId: body.ubicacionId || "todas",
+          precio: Number(body.precio) || 0, costo: Number(body.costo) || 0, stockActual: Number(body.stockInicial) || 0,
+          umbralRojo: Number(body.umbralRojo) || 5, umbralAmarillo: Number(body.umbralAmarillo) || 10, proveedor: body.proveedor || "",
+          perecible: !!body.perecible, fechaCaducidad: body.perecible ? (body.fechaCaducidad || null) : null,
+          metodoCosteo: body.metodoCosteo === "LIFO" ? "LIFO" : "FIFO",
+        };
+        productos.push(nuevo);
+        mov("alta", { producto: nuevo.nombre, sku: nuevo.sku, ubicacion: nombreUbic(nuevo.ubicacionId) });
+        return J(ficha(nuevo));
       }
 
       let m;
@@ -111,7 +149,11 @@
       }
       if ((m = path.match(/^\/api\/productos\/([^/]+)\/etiqueta$/))) {
         const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);
-        return J({ producto: ficha(p), qrDataUrl: qrDataUrl(JSON.stringify({ id: p.id, sku: p.sku, barcode: p.barcode })) });
+        // Barcode: generado local con window.OCBarcode (barcode128.js), cero llamadas
+        // externas. QR: sigue usando la API pública qrserver.com solo en esta demo
+        // estática (el backend real lo genera 100% local con la librería "qrcode").
+        const barcodeSvg = window.OCBarcode ? window.OCBarcode.code128SVG(p.barcode, { width: 300, height: 80 }) : "";
+        return J({ producto: ficha(p), qrDataUrl: qrDataUrl(JSON.stringify({ id: p.id, sku: p.sku, barcode: p.barcode })), barcodeSvg });
       }
       if ((m = path.match(/^\/api\/productos\/([^/]+)$/))) {
         const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);

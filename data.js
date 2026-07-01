@@ -61,6 +61,15 @@ if (MODO_LOYVERSE) {
       return todos.find((p) => String(p.barcode).toLowerCase() === c || String(p.sku).toLowerCase() === c) || null;
     },
 
+    // Dar de alta catálogo nuevo se hace en Loyverse mismo (es la fuente de
+    // verdad del inventario en este modo); acá solo se lee y refleja. Si en
+    // el futuro se quiere crear desde Olimpo Control, hay que llamar al
+    // endpoint de creación de items de la API de Loyverse — no implementado
+    // todavía porque José aún no ha conectado su cuenta real.
+    async crearProducto() {
+      return { error: "Con Loyverse conectado, da de alta productos nuevos directamente en Loyverse — Olimpo Control los reflejará automáticamente." };
+    },
+
     async venderUno(id, cantidad) {
       const p = await this.getProducto(id);
       if (!p) return { error: "Producto no encontrado." };
@@ -136,6 +145,33 @@ if (MODO_LOYVERSE) {
           .find((x) => String(x.barcode).toLowerCase() === c || String(x.sku).toLowerCase() === c)
           .value() || null
       );
+    },
+
+    // Crea un producto nuevo (solo modo demo/local — en modo Loyverse el
+    // catálogo se gestiona en Loyverse mismo; ver nota en server.js). Se usa
+    // cuando el dueño escanea un código que no existe y decide darlo de alta.
+    async crearProducto(datos) {
+      const p = {
+        id: randomUUID(),
+        nombre: datos.nombre,
+        categoria: datos.categoria || "General",
+        sku: datos.sku || datos.barcode,
+        barcode: datos.barcode,
+        ubicacionId: datos.ubicacionId || "todas",
+        precio: Number(datos.precio) || 0,
+        costo: Number(datos.costo) || 0,
+        stockActual: Number(datos.stockInicial) || 0,
+        umbralRojo: Number(datos.umbralRojo) || 5,
+        umbralAmarillo: Number(datos.umbralAmarillo) || 10,
+        proveedor: datos.proveedor || "",
+        perecible: !!datos.perecible,
+        fechaCaducidad: datos.perecible ? datos.fechaCaducidad || null : null,
+        metodoCosteo: datos.metodoCosteo === "LIFO" ? "LIFO" : "FIFO",
+        lotes: [], // terreno listo para costeo por lotes (fase 2, ver db.js)
+      };
+      db.get("productos").push(p).write();
+      registrarMovimiento("alta", { producto: p.nombre, sku: p.sku, ubicacion: nombreUbicacionLocal(p.ubicacionId) });
+      return p;
     },
 
     async venderUno(id, cantidad) {
