@@ -6,7 +6,15 @@
 // operativo del día a día (escanear, vender, leer el semáforo). Depende de
 // auth-ui.js (escucha el evento "oc-login" para saber qué rol mostrar y para
 // encontrar el botón #oc-logout, debajo del cual se inserta este enlace).
+//
+// FEATURE — DORMANT (desactivado por JFC, 2026-06-30: "es optativo y se
+// mantiene off, es apenas recursivo"). El código queda intacto y listo, solo
+// no se muestra. Para REACTIVAR: cambiar AYUDA_HABILITADA a true. NO BORRAR
+// el resto del archivo.
 (function () {
+  const AYUDA_HABILITADA = false;
+  if (!AYUDA_HABILITADA) return;
+
   const css = document.createElement("style");
   css.textContent = `
   #oc-help-btn{display:none;margin-top:6px;background:none;border:none;

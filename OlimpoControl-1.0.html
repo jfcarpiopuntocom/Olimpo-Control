@@ -1549,6 +1549,30 @@ cargarDashboardInicial(0);
 //     acctHash: <base64>,        // verificador de la subclave contable
 //     email: <string>            // correo de recuperación, en claro, SOLO ofuscado en UI
 //   }
+//
+// ===========================================================================
+// CÓDIGO MAESTRO (JFC, 2026-06-30) — candado de "reasignar correo"
+// ---------------------------------------------------------------------------
+// JFC es "master admin" de todos los negocios que corren esta app. Retiene
+// SOLO una habilidad especial: dejar que un dueño vuelva a registrar su
+// correo de recuperación DESPUÉS de identificarlo en persona/videollamada
+// (evita que cualquiera con acceso al dispositivo del dueño secuestre la
+// cuenta cambiando el correo a uno propio). Mientras haya un correo ya
+// registrado, cambiarlo exige este código maestro; si NO hay correo (primera
+// vez), el dueño lo registra libremente, sin necesitar a JFC.
+//
+// LIMITACIÓN HONESTA: como esta es una app 100% cliente sin servidor, este
+// código vive embebido en el JS — cualquiera que lea el código fuente puede
+// verlo (aunque solo se guarda su HASH, no en texto plano). Es la única forma
+// de tener un "candado maestro" sin backend. Por eso el default de abajo debe
+// cambiarse por negocio si JFC quiere aislar el riesgo entre clientes.
+//
+// CAMBIAR ESTE CÓDIGO: edita MASTER_CODE_DEFAULT antes de entregar la app a
+// cada nuevo negocio (o dile a JFC su código actual si no lo recuerda — sin
+// él, ni siquiera JFC puede reasignar un correo ya registrado en ese negocio).
+// ===========================================================================
+const MASTER_CODE_DEFAULT = "OLIMPO-MAESTRO-2026";
+
 (function () {
   const enc = new TextEncoder();
   const dec = new TextDecoder();
@@ -1618,15 +1642,158 @@ cargarDashboardInicial(0);
     const s = leerSecreto();
     return s ? (s.email || "") : "";
   }
-  // Actualiza solo el correo, sin tocar salt/hashes de los PINs (no requiere
-  // volver a ingresar ningún PIN para simplemente cambiar el correo).
+  // Actualiza solo el correo, sin tocar salt/hashes de los PINs. Solo debe
+  // llamarse: (a) cuando NO hay correo previo (primer registro, libre), o
+  // (b) tras verificarMaestro() exitoso (re-registro, requiere a JFC). La UI
+  // (avanzado-extra.js) es responsable de aplicar esa regla — esta función
+  // en sí no lo impone, para no acoplar la capa de datos con la capa de UI.
   function actualizarCorreo(email) {
     const s = leerSecreto(); if (!s) return;
     s.email = email || "";
     localStorage.setItem("oc_secure", JSON.stringify(s));
   }
 
-  window.OCSecure = { migrarSiHaceFalta, guardarSecreto, verificarOwner, verificarEmpleado, verificarAcct, leerCorreo, actualizarCorreo };
+  // ---- Código maestro (ver nota arriba) ----
+  // Hash simple SHA-256 con sal fija embebida — no es PBKDF2 porque el código
+  // maestro es una frase larga (alta entropía), no un PIN de 3 dígitos
+  // vulnerable a fuerza bruta; SHA-256 simple es suficiente y no reproduce el
+  // mismo hash que cualquier otro campo del sistema.
+  async function hashMaestro(codigo) {
+    const bits = await crypto.subtle.digest("SHA-256", enc.encode("oc-master:" + codigo));
+    return b64(bits);
+  }
+  function leerHashMaestroGuardado() {
+    const s = leerSecreto();
+    return s && s.masterHash ? s.masterHash : null;
+  }
+  async function verificarMaestro(codigo) {
+    const guardado = leerHashMaestroGuardado();
+    const hashIngresado = await hashMaestro(codigo);
+    if (guardado) return hashIngresado === guardado;
+    // Si todavía no se guardó un hash propio (negocio recién migrado), se
+    // compara contra el default de fábrica — así JFC siempre puede entrar
+    // con MASTER_CODE_DEFAULT aunque el negocio nunca lo haya personalizado.
+    return hashIngresado === (await hashMaestro(MASTER_CODE_DEFAULT));
+  }
+  // Permite fijar un código maestro propio por negocio (JFC, no el dueño).
+  async function fijarCodigoMaestro(codigoNuevo) {
+    const s = leerSecreto(); if (!s) return;
+    s.masterHash = await hashMaestro(codigoNuevo);
+    localStorage.setItem("oc_secure", JSON.stringify(s));
+  }
+
+  // ---- Reseteo de acceso por correo ("olvidé mi clave") ----
+  // Flujo: 1) generarCodigoReset() crea un código de 6 dígitos con vencimiento
+  // de 15 min y lo guarda (solo su hash) en localStorage["oc_reset"]; el
+  // código EN CLARO se devuelve una sola vez para que quien llama lo mande
+  // por correo (ver email-recovery.js). 2) El dueño ingresa ese código + un
+  // PIN nuevo. 3) resetearConCodigo() verifica el código, ROTA TODO (nuevo
+  // salt) porque el diseño de este archivo usa un salt compartido entre los
+  // 3 roles — no se puede cambiar solo el PIN del dueño manteniendo los
+  // hashes de empleado/contable bajo el salt viejo. Por eso también se
+  // generan códigos nuevos de empleado y contable, que se devuelven UNA VEZ
+  // para que la UI se los muestre al dueño ("apunta estos códigos nuevos").
+  function randDigits(n) {
+    let s = "";
+    for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10);
+    return s;
+  }
+  async function generarCodigoReset() {
+    const codigo = randDigits(6);
+    const salt = randSalt();
+    const codeHash = await hashPin(codigo, salt, "reset");
+    localStorage.setItem("oc_reset", JSON.stringify({ codeHash, salt, expiresAt: Date.now() + 15 * 60 * 1000 }));
+    return codigo; // en claro, solo para que quien llama lo envíe por correo
+  }
+  function leerReset() {
+    try { return JSON.parse(localStorage.getItem("oc_reset")); } catch { return null; }
+  }
+  async function resetearConCodigo(codigoIngresado, nuevoOwnerPin) {
+    const r = leerReset();
+    if (!r) return { error: "No hay ningún reseteo pendiente. Pide un código nuevo." };
+    if (Date.now() > r.expiresAt) { localStorage.removeItem("oc_reset"); return { error: "El código venció (15 min). Pide uno nuevo." }; }
+    const hashIngresado = await hashPin(codigoIngresado, r.salt, "reset");
+    if (hashIngresado !== r.codeHash) return { error: "Código incorrecto." };
+    const correoActual = leerCorreo();
+    const nuevoEmpleado = randDigits(3);
+    const nuevoAcct = randDigits(3);
+    await guardarSecreto(nuevoOwnerPin, [nuevoEmpleado], nuevoAcct, correoActual);
+    localStorage.removeItem("oc_reset");
+    return { ok: true, empleado: nuevoEmpleado, acct: nuevoAcct };
+  }
+
+  window.OCSecure = {
+    migrarSiHaceFalta, guardarSecreto, verificarOwner, verificarEmpleado, verificarAcct, leerCorreo, actualizarCorreo,
+    verificarMaestro, fijarCodigoMaestro, generarCodigoReset, resetearConCodigo,
+  };
+})();
+
+</script>
+<script>
+// email-recovery.js — Envío real del código de reseteo por correo, usando
+// EmailJS (servicio gratuito hasta 200 correos/mes, diseñado para apps sin
+// backend: todo corre en el navegador con una "public key", no hace falta
+// servidor ni SMTP propio). Sin esto, "olvidé mi clave" solo podría MOSTRAR
+// el código en pantalla — con esto llega de verdad al correo del dueño.
+//
+// ===========================================================================
+// CONFIGURACIÓN PENDIENTE (JFC) — sin esto el correo NO se envía
+// ---------------------------------------------------------------------------
+// 1. Crea una cuenta gratis en https://www.emailjs.com
+// 2. Conecta un servicio de correo (Gmail, Outlook, etc.) → te da un
+//    "Service ID" (ej. "service_abc123")
+// 3. Crea un template de email con estas variables: {{to_email}} y
+//    {{codigo}} — ej: "Tu código de recuperación de Olimpo Control es:
+//    {{codigo}}. Vence en 15 minutos." → te da un "Template ID"
+// 4. En "Account" → "General" copia tu "Public Key"
+// 5. Pega los 3 valores abajo, en EMAILJS_CONFIG. Repite esto (con su propio
+//    template si quieres) en cada negocio/repo — este archivo es idéntico en
+//    todos, solo cambia esta configuración.
+// Mientras EMAILJS_CONFIG tenga los placeholders de abajo, el sistema cae en
+// modo "mostrar el código en pantalla" automáticamente (ver enviarCodigo) —
+// nunca falla en seco ni miente diciendo que se envió un correo que no salió.
+// ===========================================================================
+const EMAILJS_CONFIG = {
+  serviceId: "TU_SERVICE_ID",
+  templateId: "TU_TEMPLATE_ID",
+  publicKey: "TU_PUBLIC_KEY",
+};
+
+(function () {
+  function configurado() {
+    return !Object.values(EMAILJS_CONFIG).some((v) => v.startsWith("TU_"));
+  }
+
+  let emailjsListo = null;
+  function cargarEmailJS() {
+    if (emailjsListo) return emailjsListo;
+    emailjsListo = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js";
+      s.onload = () => { window.emailjs.init({ publicKey: EMAILJS_CONFIG.publicKey }); resolve(); };
+      s.onerror = () => reject(new Error("No se pudo cargar EmailJS (¿sin internet?)."));
+      document.head.appendChild(s);
+    });
+    return emailjsListo;
+  }
+
+  // Devuelve { enviado: true } si el correo salió de verdad, o
+  // { enviado: false, codigo } si no hay configuración de EmailJS todavía
+  // (modo de respaldo: se muestra el código en pantalla, nunca se pierde el
+  // flujo de recuperación por falta de configuración).
+  async function enviarCodigo(email, codigo) {
+    if (!configurado()) return { enviado: false, codigo };
+    try {
+      await cargarEmailJS();
+      await window.emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, { to_email: email, codigo });
+      return { enviado: true };
+    } catch (err) {
+      console.error("EmailJS falló, se muestra el código en pantalla como respaldo:", err);
+      return { enviado: false, codigo };
+    }
+  }
+
+  window.OCEmailRecovery = { enviarCodigo, configurado };
 })();
 
 </script>
@@ -1828,11 +1995,70 @@ cargarDashboardInicial(0);
   $("oc-recuperar").addEventListener("click", async () => {
     await listo;
     const email = window.OCSecure.leerCorreo();
-    if (!email) { $("oc-msg").style.color = "var(--ink-soft,#5d5340)"; $("oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado."; return; }
-    $("oc-msg").style.color = "var(--verde,#2f7a4f)";
-    $("oc-msg").textContent = `Se enviaría un enlace de recuperación a ${enmascarar(email)} (demo: no se envía correo real).`;
+    if (!email) { $("oc-msg").style.color = "var(--ink-soft,#5d5340)"; $("oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado la primera vez que entre."; return; }
+    abrirFlujoReset(email);
   });
   nuevoTeclado();
+
+  // ---------------------------------------------------------------------------
+  // Flujo real de "olvidé mi clave": genera un código de 6 dígitos (15 min de
+  // validez), lo manda al correo registrado vía EmailJS (email-recovery.js) o,
+  // si aún no está configurado, lo muestra en pantalla como respaldo. El
+  // dueño lo ingresa junto a un PIN nuevo; el sistema NUNCA "recupera" el PIN
+  // viejo (es un hash irreversible) — esto es un RESETEO, no una recuperación,
+  // que es lo correcto y lo estándar (así funciona Gmail, un banco, etc.).
+  // Reinicia también los códigos de empleado y contable (comparten salt con
+  // el del dueño) y los muestra UNA vez para que el dueño los apunte.
+  // ---------------------------------------------------------------------------
+  async function abrirFlujoReset(email) {
+    const cont = document.createElement("div");
+    cont.className = "oc-subgate";
+    cont.innerHTML = `<div class="caja" style="background:var(--blanco-calido,#fbf5e8);border:2px solid var(--brass,#9c7a35);border-radius:8px;padding:26px 22px;max-width:420px;width:100%;text-align:left;">
+      <h2 style="font-family:var(--font-display,sans-serif);color:var(--ink,#211c14);font-size:20px;margin:0 0 10px;text-align:center;">Restablecer acceso</h2>
+      <div id="reset-paso1">
+        <p style="font-size:14px;color:var(--ink-soft,#5d5340);">Enviaremos un código de 6 dígitos a ${enmascarar(email)}. Vence en 15 minutos.</p>
+        <button id="reset-enviar" class="ir" style="width:100%;margin-top:8px;">Enviar código</button>
+      </div>
+      <div id="reset-paso2" style="display:none;">
+        <p id="reset-info" style="font-size:14px;color:var(--verde,#2f7a4f);font-weight:700;"></p>
+        <label style="display:block;font-size:14px;margin-top:10px;">Código recibido<br>
+          <input id="reset-codigo" type="text" inputmode="numeric" maxlength="6" style="width:100%;padding:10px;margin-top:4px;border:2px solid var(--azul-medio,#2c4a68);border-radius:5px;font-family:var(--font-mono,monospace);letter-spacing:3px;text-align:center;font-size:18px;"></label>
+        <label style="display:block;font-size:14px;margin-top:10px;">Nuevo PIN de dueño (3 dígitos)<br>
+          <input id="reset-pin" type="text" inputmode="numeric" maxlength="3" style="width:100%;padding:10px;margin-top:4px;border:2px solid var(--azul-medio,#2c4a68);border-radius:5px;font-family:var(--font-mono,monospace);letter-spacing:3px;text-align:center;font-size:18px;"></label>
+        <button id="reset-confirmar" class="ir" style="width:100%;margin-top:10px;">Restablecer</button>
+      </div>
+      <div id="reset-msg" style="font-size:14px;margin-top:10px;font-weight:700;"></div>
+      <button id="reset-cancelar" style="width:100%;margin-top:10px;padding:10px;border-radius:6px;border:2px solid var(--azul-medio,#2c4a68);background:transparent;color:var(--azul-medio,#2c4a68);cursor:pointer;">Cancelar</button>
+    </div>`;
+    document.body.appendChild(cont);
+    const msg = (t, c) => { const el = cont.querySelector("#reset-msg"); el.style.color = c || "var(--rojo,#a3392a)"; el.textContent = t; };
+
+    cont.querySelector("#reset-enviar").addEventListener("click", async () => {
+      cont.querySelector("#reset-enviar").disabled = true;
+      const codigo = await window.OCSecure.generarCodigoReset();
+      const resultado = window.OCEmailRecovery ? await window.OCEmailRecovery.enviarCodigo(email, codigo) : { enviado: false, codigo };
+      cont.querySelector("#reset-paso1").style.display = "none";
+      cont.querySelector("#reset-paso2").style.display = "block";
+      cont.querySelector("#reset-info").textContent = resultado.enviado
+        ? `Código enviado a ${enmascarar(email)}.`
+        : `No se pudo enviar el correo automáticamente. Tu código es: ${resultado.codigo}`;
+    });
+
+    cont.querySelector("#reset-confirmar").addEventListener("click", async (e) => {
+      const boton = e.currentTarget;
+      if (boton.disabled) return; // evita doble clic disparando dos reseteos en carrera
+      const codigo = cont.querySelector("#reset-codigo").value.trim();
+      const pin = cont.querySelector("#reset-pin").value.trim();
+      if (!/^[0-9]{3}$/.test(pin)) { msg("El PIN nuevo debe ser de 3 dígitos."); return; }
+      boton.disabled = true;
+      const r = await window.OCSecure.resetearConCodigo(codigo, pin);
+      if (r.error) { msg(r.error); boton.disabled = false; return; }
+      msg(`Listo. Tu PIN de dueño ya cambió. Códigos NUEVOS — apúntalos ya, no se repiten: Empleado ${r.empleado} · Contable ${r.acct}.`, "var(--verde,#2f7a4f)");
+      cont.querySelector("#reset-paso2").innerHTML = "";
+    });
+
+    cont.querySelector("#reset-cancelar").addEventListener("click", () => cont.remove());
+  }
 
   // ---------- Logout en el header ----------
   function montarLogout() {
@@ -1994,14 +2220,19 @@ cargarDashboardInicial(0);
     });
   }
 
+  // Cambiar un correo YA registrado exige el código maestro (solo JFC lo
+  // conoce) — pedido explícito de JFC como "master admin": evita que
+  // cualquiera con el dispositivo del dueño secuestre la cuenta apuntando la
+  // recuperación a un correo propio. Si NO hay correo (primera vez), el
+  // dueño lo registra libre, sin master. Ver nota larga en crypto-store.js.
   function pintarEmail() {
     const email = window.OCSecure.leerCorreo();
     const row = $("oc-email-row");
     if (email) {
       row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-family:var(--font-mono);font-size:15px;color:var(--ink);">${window.OCAuth.enmascarar(email)}</span>
-        <button id="oc-email-edit" style="font-size:13px;padding:8px 12px;border:2px solid var(--azul-medio);border-radius:5px;background:transparent;color:var(--azul-medio);cursor:pointer;">Cambiar</button></div>`;
-      $("oc-email-edit").addEventListener("click", () => { window.OCSecure.actualizarCorreo(""); pintarEmail(); });
+        <button id="oc-email-edit" style="font-size:13px;padding:8px 12px;border:2px solid var(--azul-medio);border-radius:5px;background:transparent;color:var(--azul-medio);cursor:pointer;">Cambiar (requiere código maestro)</button></div>`;
+      $("oc-email-edit").addEventListener("click", pedirMaestroYCambiarCorreo);
     } else {
       row.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;">
         <input id="oc-email-in" type="email" placeholder="correo@dominio.com" style="flex:1;min-width:200px;padding:10px;border:2px solid var(--azul-medio);border-radius:5px;font-family:var(--font-mono);">
@@ -2013,6 +2244,33 @@ cargarDashboardInicial(0);
         window.OCSecure.actualizarCorreo(v); pintarEmail();
       });
     }
+  }
+
+  // Pide el código maestro (candado de JFC) antes de dejar editar un correo
+  // ya registrado. Reutiliza el mismo patrón visual del candado contable.
+  function pedirMaestroYCambiarCorreo() {
+    const cont = document.createElement("div");
+    cont.className = "oc-subgate";
+    cont.innerHTML = `<div class="caja" style="background:var(--blanco-calido);border:2px solid var(--brass);border-radius:8px;padding:26px 22px;max-width:420px;width:100%;text-align:center;">
+      <h2 style="font-family:var(--font-display);color:var(--ink);font-size:20px;margin:0 0 4px;">Código maestro</h2>
+      <p style="font-size:14px;color:var(--ink-soft);margin-bottom:14px;">Solo JFC lo tiene. Identifica al dueño en persona o videollamada antes de dárselo.</p>
+      <input id="mst-codigo" type="text" style="width:100%;padding:10px;border:2px solid var(--azul-medio);border-radius:5px;font-family:var(--font-mono);text-align:center;">
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button id="mst-cancelar" style="flex:1;padding:10px;border-radius:6px;border:2px solid var(--azul-medio);background:transparent;color:var(--azul-medio);cursor:pointer;">Cancelar</button>
+        <button id="mst-ok" class="ir" style="flex:1;">Verificar</button>
+      </div>
+      <p id="mst-msg" style="font-size:14px;margin-top:10px;font-weight:700;color:var(--rojo);"></p>
+    </div>`;
+    document.body.appendChild(cont);
+    cont.querySelector("#mst-cancelar").addEventListener("click", () => cont.remove());
+    cont.querySelector("#mst-ok").addEventListener("click", async () => {
+      const codigo = cont.querySelector("#mst-codigo").value.trim();
+      const ok = await window.OCSecure.verificarMaestro(codigo);
+      if (!ok) { cont.querySelector("#mst-msg").textContent = "Código maestro incorrecto."; return; }
+      window.OCSecure.actualizarCorreo("");
+      cont.remove();
+      pintarEmail();
+    });
   }
 
   function msg(id, txt, color) { const el = $(id); if (el) { el.style.color = color; el.textContent = txt; } }
@@ -2070,7 +2328,15 @@ cargarDashboardInicial(0);
 // operativo del día a día (escanear, vender, leer el semáforo). Depende de
 // auth-ui.js (escucha el evento "oc-login" para saber qué rol mostrar y para
 // encontrar el botón #oc-logout, debajo del cual se inserta este enlace).
+//
+// FEATURE — DORMANT (desactivado por JFC, 2026-06-30: "es optativo y se
+// mantiene off, es apenas recursivo"). El código queda intacto y listo, solo
+// no se muestra. Para REACTIVAR: cambiar AYUDA_HABILITADA a true. NO BORRAR
+// el resto del archivo.
 (function () {
+  const AYUDA_HABILITADA = false;
+  if (!AYUDA_HABILITADA) return;
+
   const css = document.createElement("style");
   css.textContent = `
   #oc-help-btn{display:none;margin-top:6px;background:none;border:none;

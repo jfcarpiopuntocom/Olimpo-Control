@@ -195,11 +195,70 @@
   $("oc-recuperar").addEventListener("click", async () => {
     await listo;
     const email = window.OCSecure.leerCorreo();
-    if (!email) { $("oc-msg").style.color = "var(--ink-soft,#5d5340)"; $("oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado."; return; }
-    $("oc-msg").style.color = "var(--verde,#2f7a4f)";
-    $("oc-msg").textContent = `Se enviaría un enlace de recuperación a ${enmascarar(email)} (demo: no se envía correo real).`;
+    if (!email) { $("oc-msg").style.color = "var(--ink-soft,#5d5340)"; $("oc-msg").textContent = "No hay correo de recuperación configurado. Pídele al dueño que lo registre en Avanzado la primera vez que entre."; return; }
+    abrirFlujoReset(email);
   });
   nuevoTeclado();
+
+  // ---------------------------------------------------------------------------
+  // Flujo real de "olvidé mi clave": genera un código de 6 dígitos (15 min de
+  // validez), lo manda al correo registrado vía EmailJS (email-recovery.js) o,
+  // si aún no está configurado, lo muestra en pantalla como respaldo. El
+  // dueño lo ingresa junto a un PIN nuevo; el sistema NUNCA "recupera" el PIN
+  // viejo (es un hash irreversible) — esto es un RESETEO, no una recuperación,
+  // que es lo correcto y lo estándar (así funciona Gmail, un banco, etc.).
+  // Reinicia también los códigos de empleado y contable (comparten salt con
+  // el del dueño) y los muestra UNA vez para que el dueño los apunte.
+  // ---------------------------------------------------------------------------
+  async function abrirFlujoReset(email) {
+    const cont = document.createElement("div");
+    cont.className = "oc-subgate";
+    cont.innerHTML = `<div class="caja" style="background:var(--blanco-calido,#fbf5e8);border:2px solid var(--brass,#9c7a35);border-radius:8px;padding:26px 22px;max-width:420px;width:100%;text-align:left;">
+      <h2 style="font-family:var(--font-display,sans-serif);color:var(--ink,#211c14);font-size:20px;margin:0 0 10px;text-align:center;">Restablecer acceso</h2>
+      <div id="reset-paso1">
+        <p style="font-size:14px;color:var(--ink-soft,#5d5340);">Enviaremos un código de 6 dígitos a ${enmascarar(email)}. Vence en 15 minutos.</p>
+        <button id="reset-enviar" class="ir" style="width:100%;margin-top:8px;">Enviar código</button>
+      </div>
+      <div id="reset-paso2" style="display:none;">
+        <p id="reset-info" style="font-size:14px;color:var(--verde,#2f7a4f);font-weight:700;"></p>
+        <label style="display:block;font-size:14px;margin-top:10px;">Código recibido<br>
+          <input id="reset-codigo" type="text" inputmode="numeric" maxlength="6" style="width:100%;padding:10px;margin-top:4px;border:2px solid var(--azul-medio,#2c4a68);border-radius:5px;font-family:var(--font-mono,monospace);letter-spacing:3px;text-align:center;font-size:18px;"></label>
+        <label style="display:block;font-size:14px;margin-top:10px;">Nuevo PIN de dueño (3 dígitos)<br>
+          <input id="reset-pin" type="text" inputmode="numeric" maxlength="3" style="width:100%;padding:10px;margin-top:4px;border:2px solid var(--azul-medio,#2c4a68);border-radius:5px;font-family:var(--font-mono,monospace);letter-spacing:3px;text-align:center;font-size:18px;"></label>
+        <button id="reset-confirmar" class="ir" style="width:100%;margin-top:10px;">Restablecer</button>
+      </div>
+      <div id="reset-msg" style="font-size:14px;margin-top:10px;font-weight:700;"></div>
+      <button id="reset-cancelar" style="width:100%;margin-top:10px;padding:10px;border-radius:6px;border:2px solid var(--azul-medio,#2c4a68);background:transparent;color:var(--azul-medio,#2c4a68);cursor:pointer;">Cancelar</button>
+    </div>`;
+    document.body.appendChild(cont);
+    const msg = (t, c) => { const el = cont.querySelector("#reset-msg"); el.style.color = c || "var(--rojo,#a3392a)"; el.textContent = t; };
+
+    cont.querySelector("#reset-enviar").addEventListener("click", async () => {
+      cont.querySelector("#reset-enviar").disabled = true;
+      const codigo = await window.OCSecure.generarCodigoReset();
+      const resultado = window.OCEmailRecovery ? await window.OCEmailRecovery.enviarCodigo(email, codigo) : { enviado: false, codigo };
+      cont.querySelector("#reset-paso1").style.display = "none";
+      cont.querySelector("#reset-paso2").style.display = "block";
+      cont.querySelector("#reset-info").textContent = resultado.enviado
+        ? `Código enviado a ${enmascarar(email)}.`
+        : `No se pudo enviar el correo automáticamente. Tu código es: ${resultado.codigo}`;
+    });
+
+    cont.querySelector("#reset-confirmar").addEventListener("click", async (e) => {
+      const boton = e.currentTarget;
+      if (boton.disabled) return; // evita doble clic disparando dos reseteos en carrera
+      const codigo = cont.querySelector("#reset-codigo").value.trim();
+      const pin = cont.querySelector("#reset-pin").value.trim();
+      if (!/^[0-9]{3}$/.test(pin)) { msg("El PIN nuevo debe ser de 3 dígitos."); return; }
+      boton.disabled = true;
+      const r = await window.OCSecure.resetearConCodigo(codigo, pin);
+      if (r.error) { msg(r.error); boton.disabled = false; return; }
+      msg(`Listo. Tu PIN de dueño ya cambió. Códigos NUEVOS — apúntalos ya, no se repiten: Empleado ${r.empleado} · Contable ${r.acct}.`, "var(--verde,#2f7a4f)");
+      cont.querySelector("#reset-paso2").innerHTML = "";
+    });
+
+    cont.querySelector("#reset-cancelar").addEventListener("click", () => cont.remove());
+  }
 
   // ---------- Logout en el header ----------
   function montarLogout() {

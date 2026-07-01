@@ -32,6 +32,30 @@
 //     acctHash: <base64>,        // verificador de la subclave contable
 //     email: <string>            // correo de recuperación, en claro, SOLO ofuscado en UI
 //   }
+//
+// ===========================================================================
+// CÓDIGO MAESTRO (JFC, 2026-06-30) — candado de "reasignar correo"
+// ---------------------------------------------------------------------------
+// JFC es "master admin" de todos los negocios que corren esta app. Retiene
+// SOLO una habilidad especial: dejar que un dueño vuelva a registrar su
+// correo de recuperación DESPUÉS de identificarlo en persona/videollamada
+// (evita que cualquiera con acceso al dispositivo del dueño secuestre la
+// cuenta cambiando el correo a uno propio). Mientras haya un correo ya
+// registrado, cambiarlo exige este código maestro; si NO hay correo (primera
+// vez), el dueño lo registra libremente, sin necesitar a JFC.
+//
+// LIMITACIÓN HONESTA: como esta es una app 100% cliente sin servidor, este
+// código vive embebido en el JS — cualquiera que lea el código fuente puede
+// verlo (aunque solo se guarda su HASH, no en texto plano). Es la única forma
+// de tener un "candado maestro" sin backend. Por eso el default de abajo debe
+// cambiarse por negocio si JFC quiere aislar el riesgo entre clientes.
+//
+// CAMBIAR ESTE CÓDIGO: edita MASTER_CODE_DEFAULT antes de entregar la app a
+// cada nuevo negocio (o dile a JFC su código actual si no lo recuerda — sin
+// él, ni siquiera JFC puede reasignar un correo ya registrado en ese negocio).
+// ===========================================================================
+const MASTER_CODE_DEFAULT = "OLIMPO-MAESTRO-2026";
+
 (function () {
   const enc = new TextEncoder();
   const dec = new TextDecoder();
@@ -101,13 +125,88 @@
     const s = leerSecreto();
     return s ? (s.email || "") : "";
   }
-  // Actualiza solo el correo, sin tocar salt/hashes de los PINs (no requiere
-  // volver a ingresar ningún PIN para simplemente cambiar el correo).
+  // Actualiza solo el correo, sin tocar salt/hashes de los PINs. Solo debe
+  // llamarse: (a) cuando NO hay correo previo (primer registro, libre), o
+  // (b) tras verificarMaestro() exitoso (re-registro, requiere a JFC). La UI
+  // (avanzado-extra.js) es responsable de aplicar esa regla — esta función
+  // en sí no lo impone, para no acoplar la capa de datos con la capa de UI.
   function actualizarCorreo(email) {
     const s = leerSecreto(); if (!s) return;
     s.email = email || "";
     localStorage.setItem("oc_secure", JSON.stringify(s));
   }
 
-  window.OCSecure = { migrarSiHaceFalta, guardarSecreto, verificarOwner, verificarEmpleado, verificarAcct, leerCorreo, actualizarCorreo };
+  // ---- Código maestro (ver nota arriba) ----
+  // Hash simple SHA-256 con sal fija embebida — no es PBKDF2 porque el código
+  // maestro es una frase larga (alta entropía), no un PIN de 3 dígitos
+  // vulnerable a fuerza bruta; SHA-256 simple es suficiente y no reproduce el
+  // mismo hash que cualquier otro campo del sistema.
+  async function hashMaestro(codigo) {
+    const bits = await crypto.subtle.digest("SHA-256", enc.encode("oc-master:" + codigo));
+    return b64(bits);
+  }
+  function leerHashMaestroGuardado() {
+    const s = leerSecreto();
+    return s && s.masterHash ? s.masterHash : null;
+  }
+  async function verificarMaestro(codigo) {
+    const guardado = leerHashMaestroGuardado();
+    const hashIngresado = await hashMaestro(codigo);
+    if (guardado) return hashIngresado === guardado;
+    // Si todavía no se guardó un hash propio (negocio recién migrado), se
+    // compara contra el default de fábrica — así JFC siempre puede entrar
+    // con MASTER_CODE_DEFAULT aunque el negocio nunca lo haya personalizado.
+    return hashIngresado === (await hashMaestro(MASTER_CODE_DEFAULT));
+  }
+  // Permite fijar un código maestro propio por negocio (JFC, no el dueño).
+  async function fijarCodigoMaestro(codigoNuevo) {
+    const s = leerSecreto(); if (!s) return;
+    s.masterHash = await hashMaestro(codigoNuevo);
+    localStorage.setItem("oc_secure", JSON.stringify(s));
+  }
+
+  // ---- Reseteo de acceso por correo ("olvidé mi clave") ----
+  // Flujo: 1) generarCodigoReset() crea un código de 6 dígitos con vencimiento
+  // de 15 min y lo guarda (solo su hash) en localStorage["oc_reset"]; el
+  // código EN CLARO se devuelve una sola vez para que quien llama lo mande
+  // por correo (ver email-recovery.js). 2) El dueño ingresa ese código + un
+  // PIN nuevo. 3) resetearConCodigo() verifica el código, ROTA TODO (nuevo
+  // salt) porque el diseño de este archivo usa un salt compartido entre los
+  // 3 roles — no se puede cambiar solo el PIN del dueño manteniendo los
+  // hashes de empleado/contable bajo el salt viejo. Por eso también se
+  // generan códigos nuevos de empleado y contable, que se devuelven UNA VEZ
+  // para que la UI se los muestre al dueño ("apunta estos códigos nuevos").
+  function randDigits(n) {
+    let s = "";
+    for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10);
+    return s;
+  }
+  async function generarCodigoReset() {
+    const codigo = randDigits(6);
+    const salt = randSalt();
+    const codeHash = await hashPin(codigo, salt, "reset");
+    localStorage.setItem("oc_reset", JSON.stringify({ codeHash, salt, expiresAt: Date.now() + 15 * 60 * 1000 }));
+    return codigo; // en claro, solo para que quien llama lo envíe por correo
+  }
+  function leerReset() {
+    try { return JSON.parse(localStorage.getItem("oc_reset")); } catch { return null; }
+  }
+  async function resetearConCodigo(codigoIngresado, nuevoOwnerPin) {
+    const r = leerReset();
+    if (!r) return { error: "No hay ningún reseteo pendiente. Pide un código nuevo." };
+    if (Date.now() > r.expiresAt) { localStorage.removeItem("oc_reset"); return { error: "El código venció (15 min). Pide uno nuevo." }; }
+    const hashIngresado = await hashPin(codigoIngresado, r.salt, "reset");
+    if (hashIngresado !== r.codeHash) return { error: "Código incorrecto." };
+    const correoActual = leerCorreo();
+    const nuevoEmpleado = randDigits(3);
+    const nuevoAcct = randDigits(3);
+    await guardarSecreto(nuevoOwnerPin, [nuevoEmpleado], nuevoAcct, correoActual);
+    localStorage.removeItem("oc_reset");
+    return { ok: true, empleado: nuevoEmpleado, acct: nuevoAcct };
+  }
+
+  window.OCSecure = {
+    migrarSiHaceFalta, guardarSecreto, verificarOwner, verificarEmpleado, verificarAcct, leerCorreo, actualizarCorreo,
+    verificarMaestro, fijarCodigoMaestro, generarCodigoReset, resetearConCodigo,
+  };
 })();

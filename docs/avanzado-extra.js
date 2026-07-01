@@ -97,14 +97,19 @@
     });
   }
 
+  // Cambiar un correo YA registrado exige el código maestro (solo JFC lo
+  // conoce) — pedido explícito de JFC como "master admin": evita que
+  // cualquiera con el dispositivo del dueño secuestre la cuenta apuntando la
+  // recuperación a un correo propio. Si NO hay correo (primera vez), el
+  // dueño lo registra libre, sin master. Ver nota larga en crypto-store.js.
   function pintarEmail() {
     const email = window.OCSecure.leerCorreo();
     const row = $("oc-email-row");
     if (email) {
       row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-family:var(--font-mono);font-size:15px;color:var(--ink);">${window.OCAuth.enmascarar(email)}</span>
-        <button id="oc-email-edit" style="font-size:13px;padding:8px 12px;border:2px solid var(--azul-medio);border-radius:5px;background:transparent;color:var(--azul-medio);cursor:pointer;">Cambiar</button></div>`;
-      $("oc-email-edit").addEventListener("click", () => { window.OCSecure.actualizarCorreo(""); pintarEmail(); });
+        <button id="oc-email-edit" style="font-size:13px;padding:8px 12px;border:2px solid var(--azul-medio);border-radius:5px;background:transparent;color:var(--azul-medio);cursor:pointer;">Cambiar (requiere código maestro)</button></div>`;
+      $("oc-email-edit").addEventListener("click", pedirMaestroYCambiarCorreo);
     } else {
       row.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;">
         <input id="oc-email-in" type="email" placeholder="correo@dominio.com" style="flex:1;min-width:200px;padding:10px;border:2px solid var(--azul-medio);border-radius:5px;font-family:var(--font-mono);">
@@ -116,6 +121,33 @@
         window.OCSecure.actualizarCorreo(v); pintarEmail();
       });
     }
+  }
+
+  // Pide el código maestro (candado de JFC) antes de dejar editar un correo
+  // ya registrado. Reutiliza el mismo patrón visual del candado contable.
+  function pedirMaestroYCambiarCorreo() {
+    const cont = document.createElement("div");
+    cont.className = "oc-subgate";
+    cont.innerHTML = `<div class="caja" style="background:var(--blanco-calido);border:2px solid var(--brass);border-radius:8px;padding:26px 22px;max-width:420px;width:100%;text-align:center;">
+      <h2 style="font-family:var(--font-display);color:var(--ink);font-size:20px;margin:0 0 4px;">Código maestro</h2>
+      <p style="font-size:14px;color:var(--ink-soft);margin-bottom:14px;">Solo JFC lo tiene. Identifica al dueño en persona o videollamada antes de dárselo.</p>
+      <input id="mst-codigo" type="text" style="width:100%;padding:10px;border:2px solid var(--azul-medio);border-radius:5px;font-family:var(--font-mono);text-align:center;">
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button id="mst-cancelar" style="flex:1;padding:10px;border-radius:6px;border:2px solid var(--azul-medio);background:transparent;color:var(--azul-medio);cursor:pointer;">Cancelar</button>
+        <button id="mst-ok" class="ir" style="flex:1;">Verificar</button>
+      </div>
+      <p id="mst-msg" style="font-size:14px;margin-top:10px;font-weight:700;color:var(--rojo);"></p>
+    </div>`;
+    document.body.appendChild(cont);
+    cont.querySelector("#mst-cancelar").addEventListener("click", () => cont.remove());
+    cont.querySelector("#mst-ok").addEventListener("click", async () => {
+      const codigo = cont.querySelector("#mst-codigo").value.trim();
+      const ok = await window.OCSecure.verificarMaestro(codigo);
+      if (!ok) { cont.querySelector("#mst-msg").textContent = "Código maestro incorrecto."; return; }
+      window.OCSecure.actualizarCorreo("");
+      cont.remove();
+      pintarEmail();
+    });
   }
 
   function msg(id, txt, color) { const el = $(id); if (el) { el.style.color = color; el.textContent = txt; } }
