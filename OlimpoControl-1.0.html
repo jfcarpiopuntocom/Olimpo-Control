@@ -1850,6 +1850,36 @@ const EMAILJS_CONFIG = {
   let rol = null; // "dueno" | "empleado"
   let listo = window.OCSecure.migrarSiHaceFalta(); // promesa: migra oc_auth viejo (si existe) sin perder lo que José ya configuró
 
+  // ---------------------------------------------------------------------------
+  // BLOQUEO POR FUERZA BRUTA (tronco 1 del árbol de problemas, JFC 2026-06-30)
+  // ---------------------------------------------------------------------------
+  // Al 5º intento fallido seguido, el teclado se bloquea 60s con cuenta
+  // regresiva visible. Se guarda en sessionStorage (no localStorage) a
+  // propósito: sobrevive a una recarga de página DURANTE el bloqueo (no es
+  // una forma de saltárselo — recargar no libera el candado antes de tiempo),
+  // pero se limpia solo si se cierra la pestaña, lo cual es aceptable porque
+  // reabrir la pestaña no es un vector de fuerza bruta realista en un POS
+  // físico. La ÚNICA forma de destrabarlo es que pasen los 60s de verdad; NO
+  // hay botón de "reintentar" que lo salte.
+  const BLOQUEO_TRAS_INTENTOS = 5;
+  const BLOQUEO_DURACION_MS = 60 * 1000;
+  function leerIntentos() {
+    try { return JSON.parse(sessionStorage.getItem("oc_intentos")) || { fallos: 0, bloqueadoHasta: 0 }; }
+    catch { return { fallos: 0, bloqueadoHasta: 0 }; }
+  }
+  function guardarIntentos(x) { sessionStorage.setItem("oc_intentos", JSON.stringify(x)); }
+  function registrarFallo() {
+    const st = leerIntentos();
+    st.fallos += 1;
+    if (st.fallos >= BLOQUEO_TRAS_INTENTOS) { st.bloqueadoHasta = Date.now() + BLOQUEO_DURACION_MS; st.fallos = 0; }
+    guardarIntentos(st);
+  }
+  function registrarExito() { sessionStorage.removeItem("oc_intentos"); }
+  function msRestantesBloqueo() {
+    const st = leerIntentos();
+    return Math.max(0, st.bloqueadoHasta - Date.now());
+  }
+
   // ---------- CSS ----------
   const css = document.createElement("style");
   css.textContent = `
@@ -1962,9 +1992,29 @@ const EMAILJS_CONFIG = {
   document.body.appendChild(gate);
 
   let teclado = null;
+  let intervaloCountdown = null;
   function nuevoTeclado() {
+    clearInterval(intervaloCountdown);
+    const restante = msRestantesBloqueo();
+    if (restante > 0) return mostrarBloqueo(restante);
     // Re-monta el teclado (re-baraja emojis) cada vez que aparece el candado.
+    $("oc-pad").style.display = "";
     teclado = montarTeclado($("oc-pad"), $("oc-slots"), validar);
+    $("oc-borrar").disabled = false;
+  }
+  // Reemplaza el teclado por una cuenta regresiva. No hay botón para saltarla:
+  // la única salida es que el tiempo real transcurra (ver nota arriba).
+  function mostrarBloqueo(msRestantes) {
+    $("oc-pad").style.display = "none";
+    $("oc-borrar").disabled = true;
+    const pintar = () => {
+      const restante = msRestantesBloqueo();
+      if (restante <= 0) { clearInterval(intervaloCountdown); nuevoTeclado(); return; }
+      $("oc-msg").style.color = "var(--rojo,#a3392a)";
+      $("oc-msg").textContent = `Demasiados intentos. Espera ${Math.ceil(restante / 1000)}s.`;
+    };
+    pintar();
+    intervaloCountdown = setInterval(pintar, 1000);
   }
   function $(id) { return document.getElementById(id); }
 
@@ -1973,12 +2023,15 @@ const EMAILJS_CONFIG = {
     $("oc-msg").textContent = txt;
     gate.classList.add("err");
     setTimeout(() => gate.classList.remove("err"), 400);
-    nuevoTeclado(); // limpia y re-baraja
+    nuevoTeclado(); // limpia y re-baraja (o muestra el bloqueo, si ya se cumplió)
   }
   async function validar(code) {
     await listo;
-    if (await window.OCSecure.verificarOwner(code)) return entrar("dueno");
-    if (await window.OCSecure.verificarEmpleado(code)) return entrar("empleado");
+    if (await window.OCSecure.verificarOwner(code)) { registrarExito(); return entrar("dueno"); }
+    if (await window.OCSecure.verificarEmpleado(code)) { registrarExito(); return entrar("empleado"); }
+    registrarFallo();
+    const restante = msRestantesBloqueo();
+    if (restante > 0) { error(`Demasiados intentos. Espera ${Math.ceil(restante / 1000)}s.`); return; }
     error("Clave incorrecta. Intenta de nuevo.");
   }
   function entrar(nuevoRol) {
@@ -1987,8 +2040,44 @@ const EMAILJS_CONFIG = {
     document.body.classList.toggle("rol-dueno", rol === "dueno");
     gate.style.display = "none";
     montarLogout();
+    reiniciarInactividad();
     if (rol === "empleado") { const n = document.querySelector('nav button[data-vista="hoy"]'); if (n) n.click(); }
     window.dispatchEvent(new CustomEvent("oc-login", { detail: { rol } }));
+  }
+
+  // ---------------------------------------------------------------------------
+  // TIMEOUT DE INACTIVIDAD (tronco 1, JFC 2026-06-30): 30 min sin ningún click
+  // ni tecla en toda la página cierran la sesión solos. Crítico porque el POS
+  // corre en una tablet compartida de mostrador — el empleado del turno
+  // siguiente no debe encontrarse la sesión del dueño abierta con acceso a
+  // liquidaciones y claves. Se reinicia con CUALQUIER click o keydown en el
+  // documento (no solo dentro de la app), mientras haya alguien logueado.
+  // ---------------------------------------------------------------------------
+  const INACTIVIDAD_MS = 30 * 60 * 1000;
+  let temporizadorInactividad = null;
+  function reiniciarInactividad() {
+    clearTimeout(temporizadorInactividad);
+    if (!rol) return;
+    temporizadorInactividad = setTimeout(() => cerrarSesion("Sesión cerrada por inactividad."), INACTIVIDAD_MS);
+  }
+  document.addEventListener("click", reiniciarInactividad);
+  document.addEventListener("keydown", reiniciarInactividad);
+
+  // Punto único de logout (manual o por inactividad) para que ambos caminos
+  // limpien exactamente el mismo estado — antes solo existía inline dentro
+  // del botón Salir, y un logout automático por inactividad habría tenido
+  // que duplicar esa lógica (con el riesgo de que se desincronizaran).
+  function cerrarSesion(mensaje) {
+    clearTimeout(temporizadorInactividad);
+    rol = null;
+    document.body.classList.remove("rol-empleado", "rol-dueno");
+    nuevoTeclado();
+    gate.style.display = "flex";
+    $("oc-msg").style.color = mensaje ? "var(--rojo,#a3392a)" : "";
+    $("oc-msg").textContent = mensaje || "";
+    const b = document.getElementById("oc-logout");
+    if (b) b.remove();
+    window.dispatchEvent(new CustomEvent("oc-logout"));
   }
 
   $("oc-borrar").addEventListener("click", () => { $("oc-msg").textContent = ""; if (teclado) teclado.reset(); });
@@ -2067,12 +2156,7 @@ const EMAILJS_CONFIG = {
     if (!header) return;
     const b = document.createElement("button");
     b.id = "oc-logout"; b.textContent = "Salir";
-    b.addEventListener("click", () => {
-      rol = null; document.body.classList.remove("rol-empleado", "rol-dueno");
-      $("oc-msg").textContent = ""; nuevoTeclado();
-      gate.style.display = "flex"; b.remove();
-      window.dispatchEvent(new CustomEvent("oc-logout")); // avisa a help-ui.js (y a quien más le importe) para que oculte lo que solo debe verse logueado
-    });
+    b.addEventListener("click", () => cerrarSesion());
     header.appendChild(b);
   }
 
