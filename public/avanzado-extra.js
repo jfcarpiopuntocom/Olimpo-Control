@@ -98,6 +98,66 @@
       </div>`;
     vista.appendChild(gestion);
 
+    // --- Conectar Loyverse + reseteo maestro (solo con backend real, no en
+    // la demo estática — ver window.OC_DEMO en mock-backend.js) ---
+    if (!window.OC_DEMO) {
+      const loy = document.createElement("div");
+      loy.className = "panel-escaner tag-card";
+      loy.style.cssText = "text-align:left;margin-top:22px;";
+      loy.innerHTML = `
+        <h3 class="seccion" style="margin-top:0;">Conectar Loyverse</h3>
+        <p style="font-size:14px;color:var(--ink-soft);margin-top:0;" id="oc-loy-estado">Cargando estado…</p>
+        <input id="oc-loy-token" type="password" placeholder="Access Token de Loyverse" style="width:100%;padding:10px;border:2px solid var(--azul-medio);border-radius:5px;font-family:var(--font-mono);margin-top:6px;">
+        <button id="oc-loy-guardar" class="ir" style="margin-top:10px;background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">Guardar y conectar</button>
+        <p id="oc-loy-msg" style="font-size:14px;margin-top:8px;font-weight:700;"></p>
+      `;
+      vista.appendChild(loy);
+
+      fetch(`${API}/config/loyverse`).then((r) => r.json()).then((s) => {
+        $("oc-loy-estado").textContent = s.modoActual === "loyverse"
+          ? "✅ Conectado a Loyverse. Los datos que ves vienen de tu cuenta real."
+          : s.tokenGuardado
+            ? "Token guardado pero el servidor no se ha reiniciado todavía — reinícialo para activar Loyverse."
+            : "Sin conectar. Estás viendo datos de ejemplo. Pega tu Access Token de Loyverse (Back Office → Settings → Access Tokens) para conectar tu cuenta real.";
+      }).catch(() => { $("oc-loy-estado").textContent = "No se pudo consultar el estado."; });
+
+      $("oc-loy-guardar").addEventListener("click", async () => {
+        const token = $("oc-loy-token").value.trim();
+        if (!token) { msg("oc-loy-msg", "Pega tu Access Token primero.", "var(--rojo)"); return; }
+        const res = await fetch(`${API}/config/loyverse`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }) });
+        const r = await res.json();
+        if (!res.ok) { msg("oc-loy-msg", r.error, "var(--rojo)"); return; }
+        $("oc-loy-token").value = "";
+        msg("oc-loy-msg", r.mensaje, "var(--verde)");
+      });
+
+      // --- Reseteo maestro: SOLO JFC conoce esta clave. No confundir con la
+      // subclave contable ni con el código maestro del correo — este vive
+      // 100% del lado del servidor (nunca en el JS que el navegador puede
+      // leer), es la última salida si un dueño queda bloqueado por completo.
+      const master = document.createElement("div");
+      master.className = "panel-escaner tag-card";
+      master.style.cssText = "text-align:left;margin-top:22px;border-color:var(--rust);";
+      master.innerHTML = `
+        <h3 class="seccion" style="margin-top:0;color:var(--rust);">Zona de reseteo maestro</h3>
+        <p style="font-size:14px;color:var(--ink-soft);margin-top:0;">Reservado. Borra la conexión de Loyverse guardada y limpia el acceso local (claves y correo) para empezar de cero.</p>
+        <input id="oc-master-clave" type="password" placeholder="Clave maestra" style="width:160px;padding:10px;border:2px solid var(--rust);border-radius:5px;font-family:var(--font-mono);text-align:center;">
+        <button id="oc-master-ir" class="ir" style="margin-top:10px;background:var(--rust);color:var(--blanco-calido);border-color:var(--rust-deep);">Ejecutar reseteo</button>
+        <p id="oc-master-msg" style="font-size:14px;margin-top:8px;font-weight:700;"></p>
+      `;
+      vista.appendChild(master);
+
+      $("oc-master-ir").addEventListener("click", async () => {
+        const clave = $("oc-master-clave").value.trim();
+        if (!confirm("Esto borra la conexión de Loyverse y el acceso local guardado. ¿Continuar?")) return;
+        const res = await fetch(`${API}/config/reset-maestro`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave }) });
+        const r = await res.json();
+        if (!res.ok) { msg("oc-master-msg", r.error, "var(--rojo)"); return; }
+        if (r.limpiarLocalStorage) localStorage.removeItem("oc_secure");
+        msg("oc-master-msg", r.mensaje, "var(--verde)");
+      });
+    }
+
     window.OCAuth.listo().then(() => { pintarEmail(); });
 
     // Cambiar los 3 PINs rota TODO (nuevo salt + nuevos hashes). Por eso se

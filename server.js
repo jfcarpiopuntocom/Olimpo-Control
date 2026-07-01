@@ -10,6 +10,7 @@ const cors = require("cors");
 const QRCode = require("qrcode");
 const path = require("path");
 const data = require("./data");
+const loyverse = require("./loyverse");
 const { code128SVG } = require("./barcode");
 
 const app = express();
@@ -283,6 +284,38 @@ app.post("/api/respaldo/importar", (req, res) => {
   const r = data.importarTodo(req.body);
   if (r.error) return res.status(400).json({ error: r.error });
   res.json({ ok: true });
+});
+
+// --- Conectar Loyverse (JFC 2026-07-01: "que José tome total control") ---
+// El dueño pega su Access Token de Loyverse aquí mismo, sin tocar consola ni
+// archivos .env. Requiere reiniciar el servidor para activarse de verdad
+// (MODO_LOYVERSE en data.js se fija una sola vez al arrancar el proceso) —
+// se lo decimos explícitamente en la respuesta, nunca fingimos que ya cambió.
+app.get("/api/config/loyverse", (req, res) => {
+  res.json({ modoActual: data.modo, tokenGuardado: loyverse.tieneTokenGuardado() });
+});
+app.post("/api/config/loyverse", (req, res) => {
+  const token = String(req.body.token || "").trim();
+  if (!token) return res.status(400).json({ error: "Pega tu Access Token de Loyverse." });
+  loyverse.guardarToken(token);
+  res.json({ ok: true, mensaje: "Token guardado. Reinicia el servidor (Ctrl+C y npm start, o redeploy) para conectar con Loyverse." });
+});
+
+// --- Reseteo maestro (JFC 2026-07-01) — SOLO JFC conoce esta clave (777). ---
+// Borra el token de Loyverse guardado localmente y le avisa al frontend que
+// limpie su localStorage cifrado (oc_secure), devolviendo el negocio a un
+// estado de fábrica: nuevo correo de recuperación, nuevas claves por
+// definir. Es la última salida si un dueño se bloquea por completo y JFC
+// necesita reconfigurar todo desde cero. Vive server-side (nunca se envía
+// al navegador), a diferencia del código maestro de crypto-store.js que sí
+// vive en el JS público — este es más fuerte precisamente porque no se
+// puede leer con "ver código fuente".
+const CLAVE_MAESTRA_RESET = "777";
+app.post("/api/config/reset-maestro", (req, res) => {
+  const clave = String(req.body.clave || "").trim();
+  if (clave !== CLAVE_MAESTRA_RESET) return res.status(403).json({ error: "Clave maestra incorrecta." });
+  loyverse.borrarToken();
+  res.json({ ok: true, limpiarLocalStorage: true, mensaje: "Reseteo completo. Reinicia el servidor y recarga la página." });
 });
 
 // --- Configuración: gastos mensuales (siempre local, sin importar el modo) ---

@@ -810,7 +810,8 @@
 </main>
 
 <footer>
-  Olimpo Control 1.0 — v0.9 — Capa visual sobre Loyverse · J. F. Carpio
+  Olimpo Control 1.0 — Node.js · Express · WebCrypto AES-256-GCM · PBKDF2 (150k it.) · Code128 · QR · arquitectura de cifrado end-to-end inspirada en nostr, sin servidor central de identidad
+  <br><em>desarrollado por The Real Urban Shaman para Olimpo Club - 2026</em>
 </footer>
 
 <!-- MODAL ETIQUETA -->
@@ -820,312 +821,6 @@
   </div>
 </div>
 
-<script>
-// barcode128.js — Espejo en el navegador de barcode.js (servidor). Mismo
-// algoritmo Code128B, sin dependencias, para que la demo estática (GitHub
-// Pages, sin backend Node) también pueda dibujar barcode real y no solo QR.
-(function () {
-  const PATTERNS = [
-    "212222","222122","222221","121223","121322","131222","122213","122312","132212","221213",
-    "221312","231212","112232","122132","122231","113222","123122","123221","223211","221132",
-    "221231","213212","223112","312131","311222","321122","321221","312212","322112","322211",
-    "212123","212321","232121","111323","131123","131321","112313","132113","132311","211313",
-    "231113","231311","112133","112331","132131","113123","113321","133121","313121","211331",
-    "231131","213113","213311","213131","311123","311321","331121","312113","312311","332111",
-    "314111","221411","431111","111224","111422","121124","121421","141122","141221","112214",
-    "112412","122114","122411","142112","142211","241211","221114","413111","241112","134111",
-    "111242","121142","121241","114212","124112","124211","411212","421112","421211","212141",
-    "214121","412121","111143","111341","131141","114113","114311","411113","411311","113141",
-    "114131","311141","411131","211412","211214","211232","2331112",
-  ];
-  const START_B = 104, STOP = 106;
-  function valorDe(ch) {
-    const code = ch.charCodeAt(0);
-    if (code < 32 || code > 126) throw new Error(`Carácter fuera de rango para Code128B: "${ch}"`);
-    return code - 32;
-  }
-  function code128SVG(texto, opts) {
-    const width = (opts && opts.width) || 260, height = (opts && opts.height) || 70, margin = (opts && opts.margin) || 6;
-    const valores = [START_B, ...texto.split("").map(valorDe)];
-    const checksum = valores.reduce((acc, v, i) => (i === 0 ? v : acc + v * i), 0) % 103;
-    valores.push(checksum, STOP);
-    const modulos = valores.map((v) => PATTERNS[v]).join("");
-    const total = modulos.split("").reduce((a, c) => a + Number(c), 0);
-    const anchoUnidad = (width - margin * 2) / total;
-    let x = margin, barras = "", negro = true;
-    for (const ch of modulos) {
-      const w = Number(ch) * anchoUnidad;
-      if (negro) barras += `<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${height}" fill="#000"/>`;
-      x += w; negro = !negro;
-    }
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="#fff"/>${barras}</svg>`;
-  }
-  window.OCBarcode = { code128SVG };
-})();
-
-</script>
-<script>
-// mock-backend.js — Backend simulado dentro del navegador, para la demo
-// pública en GitHub Pages (que no puede correr Node). Intercepta fetch a
-// /api/* y responde con la misma lógica que server.js, usando datos de
-// ejemplo en memoria. En el servidor real este archivo NO se carga.
-(function () {
-  // Marca global para que index.html sepa que corre sin backend real y NUNCA
-  // muestre un mensaje de "el servidor no responde" en la demo pública.
-  window.OC_DEMO = true;
-  const ZONA = "America/Guayaquil";
-  function hoyISO() {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: ZONA, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  }
-  function diasEnMesActual() {
-    const [anio, mes] = hoyISO().split("-").map(Number);
-    return new Date(anio, mes, 0).getDate();
-  }
-
-  const ubicaciones = [
-    { id: "centro", nombre: "Mostrador Centro" },
-    { id: "feria", nombre: "Mostrador Feria Libre" },
-    { id: "terminal", nombre: "Kiosco Terminal Terrestre" },
-  ];
-
-  const productos = [
-    { id: "p01", nombre: "Marlboro Rojo Cajetilla", categoria: "Cigarrillos", sku: "MAR-RED-20", barcode: "7501234567001", ubicacionId: "centro", precio: 4.5, costo: 3.2, stockActual: 36, umbralRojo: 10, umbralAmarillo: 20, proveedor: "Distribuidora Andina" },
-    { id: "p02", nombre: "Marlboro Gold Cajetilla", categoria: "Cigarrillos", sku: "MAR-GLD-20", barcode: "7501234567002", ubicacionId: "centro", precio: 4.5, costo: 3.2, stockActual: 6, umbralRojo: 10, umbralAmarillo: 20, proveedor: "Distribuidora Andina" },
-    { id: "p03", nombre: "Vaper Desechable Frutos Rojos", categoria: "Vapes", sku: "VAP-FR-001", barcode: "7501234567003", ubicacionId: "centro", precio: 12.0, costo: 6.0, stockActual: 18, umbralRojo: 5, umbralAmarillo: 10, proveedor: "VapeCity EC" },
-    { id: "p04", nombre: "Encendedor Clipper Clásico", categoria: "Accesorios", sku: "ENC-CLI-001", barcode: "7501234567004", ubicacionId: "centro", precio: 1.75, costo: 0.6, stockActual: 80, umbralRojo: 15, umbralAmarillo: 30, proveedor: "Importadora Sur" },
-    { id: "p05", nombre: "Papel Rizla King Size", categoria: "Accesorios", sku: "RIZ-KS-001", barcode: "7501234567005", ubicacionId: "centro", precio: 1.2, costo: 0.45, stockActual: 14, umbralRojo: 8, umbralAmarillo: 15, proveedor: "Importadora Sur" },
-    { id: "p06", nombre: "Lark Box 20", categoria: "Cigarrillos", sku: "LRK-BOX-20", barcode: "7501234567006", ubicacionId: "feria", precio: 4.0, costo: 2.9, stockActual: 24, umbralRojo: 10, umbralAmarillo: 18, proveedor: "Distribuidora Andina" },
-    { id: "p07", nombre: "Puro Backwoods Original", categoria: "Puros", sku: "BWD-ORG-001", barcode: "7501234567007", ubicacionId: "feria", precio: 3.5, costo: 1.4, stockActual: 22, umbralRojo: 6, umbralAmarillo: 12, proveedor: "Importadora Sur" },
-    { id: "p08", nombre: "Vaper Desechable Menta Hielo", categoria: "Vapes", sku: "VAP-MH-001", barcode: "7501234567008", ubicacionId: "feria", precio: 12.0, costo: 6.5, stockActual: 4, umbralRojo: 5, umbralAmarillo: 10, proveedor: "VapeCity EC" },
-    { id: "p09", nombre: "Agua Cielo 600ml", categoria: "Bebidas", sku: "AGU-600-001", barcode: "7501234567009", ubicacionId: "feria", precio: 0.8, costo: 0.45, stockActual: 60, umbralRojo: 12, umbralAmarillo: 24, proveedor: "Tía Distribución", perecible: true, fechaCaducidad: "2026-09-15", metodoCosteo: "FIFO" },
-    { id: "p10", nombre: "Encendedor Bic Surtido", categoria: "Accesorios", sku: "ENC-BIC-001", barcode: "7501234567010", ubicacionId: "feria", precio: 1.5, costo: 0.5, stockActual: 9, umbralRojo: 10, umbralAmarillo: 20, proveedor: "Importadora Sur" },
-    { id: "p11", nombre: "Pielroja Cajetilla", categoria: "Cigarrillos", sku: "PRJ-CAJ-20", barcode: "7501234567011", ubicacionId: "terminal", precio: 3.75, costo: 2.7, stockActual: 30, umbralRojo: 10, umbralAmarillo: 18, proveedor: "Distribuidora Andina" },
-    { id: "p12", nombre: "Chicle Trident Menta", categoria: "Snacks", sku: "TRI-MEN-001", barcode: "7501234567012", ubicacionId: "terminal", precio: 0.6, costo: 0.25, stockActual: 50, umbralRojo: 10, umbralAmarillo: 20, proveedor: "Tía Distribución" },
-    { id: "p13", nombre: "Vaper Desechable Mango", categoria: "Vapes", sku: "VAP-MNG-001", barcode: "7501234567013", ubicacionId: "terminal", precio: 12.5, costo: 6.0, stockActual: 16, umbralRojo: 5, umbralAmarillo: 10, proveedor: "VapeCity EC" },
-    { id: "p14", nombre: "Café en Lata Listo", categoria: "Bebidas", sku: "CAF-LAT-001", barcode: "7501234567014", ubicacionId: "terminal", precio: 1.1, costo: 0.65, stockActual: 3, umbralRojo: 8, umbralAmarillo: 16, proveedor: "Tía Distribución", perecible: true, fechaCaducidad: "2026-07-10", metodoCosteo: "FIFO" },
-    { id: "p15", nombre: "Filtros de Cartón Pack 50", categoria: "Accesorios", sku: "FIL-CRT-050", barcode: "7501234567015", ubicacionId: "terminal", precio: 1.0, costo: 0.35, stockActual: 28, umbralRojo: 8, umbralAmarillo: 15, proveedor: "Importadora Sur" },
-  ];
-
-  const ventas = [];
-  const movimientos = [];
-  const gastosMensuales = { centro: 0, feria: 0, terminal: 0 };
-  const ORDEN = { rojo: 0, amarillo: 1, azul: 2, verde: 3 };
-
-  function nombreUbic(id) { const u = ubicaciones.find((x) => x.id === id); return u ? u.nombre : "Ubicación desconocida"; }
-  // Días para vencer (negativo = ya venció). Espejo de diasParaVencer() en server.js.
-  function diasParaVencer(fecha) {
-    if (!fecha) return null;
-    const hoy = new Date(hoyISO() + "T00:00:00");
-    const venc = new Date(fecha + "T00:00:00");
-    return Math.round((venc - hoy) / 86400000);
-  }
-  // Espejo de calcularEstado() en server.js: combina stock + vencimiento,
-  // se queda con la señal más grave de las dos.
-  function estadoDe(p) {
-    const margen = p.precio > 0 ? (p.precio - p.costo) / p.precio : 0;
-    const dias = p.perecible ? diasParaVencer(p.fechaCaducidad) : null;
-    let porStock;
-    if (p.stockActual <= 0) porStock = { estado: "rojo", mensaje: "Sin stock — repón cuanto antes" };
-    else if (p.stockActual <= p.umbralRojo) porStock = { estado: "rojo", mensaje: `Quedan ${p.stockActual} — reponer urgente` };
-    else if (p.stockActual <= p.umbralAmarillo) porStock = { estado: "amarillo", mensaje: `Quedan ${p.stockActual} — revisar pronto` };
-    else if (margen >= 0.5) porStock = { estado: "azul", mensaje: "Buen margen — impúlsalo esta semana" };
-    else porStock = { estado: "verde", mensaje: "Stock saludable" };
-    if (dias == null) return { ...porStock, dias };
-    let porVenc = null;
-    if (dias < 0) porVenc = { estado: "rojo", mensaje: `Venció hace ${Math.abs(dias)} día${Math.abs(dias) === 1 ? "" : "s"} — retíralo` };
-    else if (dias <= 3) porVenc = { estado: "rojo", mensaje: `Vence en ${dias} día${dias === 1 ? "" : "s"} — véndelo ya` };
-    else if (dias <= 7) porVenc = { estado: "amarillo", mensaje: `Vence en ${dias} días — véndelo primero` };
-    if (!porVenc) return { ...porStock, dias };
-    const masGrave = ORDEN[porVenc.estado] <= ORDEN[porStock.estado] ? porVenc : porStock;
-    return { ...masGrave, dias };
-  }
-  function ficha(p) {
-    const e = estadoDe(p);
-    return { id: p.id, nombre: p.nombre, precio: p.precio, sku: p.sku, barcode: p.barcode, proveedor: p.proveedor, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, categoria: p.categoria, ubicacionId: p.ubicacionId, ubicacionNombre: nombreUbic(p.ubicacionId), perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: e.dias, metodoCosteo: p.metodoCosteo || "FIFO" };
-  }
-  function filtrar(uid) { return !uid || uid === "todas" ? productos : productos.filter((p) => p.ubicacionId === uid); }
-  function ventasHoyDe(uid) { return ventas.filter((v) => (!uid || uid === "todas" || v.ubicacionId === uid)); }
-  function mov(tipo, detalle) { movimientos.push({ id: String(Date.now() + Math.random()), tipo, detalle, fecha: new Date().toISOString() }); }
-  const J = (obj, status) => new Response(JSON.stringify(obj), { status: status || 200, headers: { "Content-Type": "application/json" } });
-
-  // Genera un QR como data URL sin dependencias: usa una API pública de imagen.
-  // Para una demo es suficiente; el backend real lo genera localmente con qrcode.
-  function qrDataUrl(payload) {
-    return "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=4&data=" + encodeURIComponent(payload);
-  }
-
-  const realFetch = window.fetch.bind(window);
-
-  window.fetch = async function (url, opts) {
-    try {
-      const u = new URL(url, window.location.origin);
-      if (!u.pathname.startsWith("/api")) return realFetch(url, opts);
-      const path = u.pathname;
-      const q = u.searchParams;
-      const body = opts && opts.body ? JSON.parse(opts.body) : {};
-      const uid = q.get("ubicacionId");
-
-      if (path === "/api/modo") return J({ modo: "demo-estatico" });
-      if (path === "/api/ubicaciones") return J(ubicaciones);
-
-      if (path === "/api/dashboard") {
-        const ps = filtrar(uid), vh = ventasHoyDe(uid);
-        const entra = vh.reduce((a, v) => a + v.precioUnit * v.cantidad, 0);
-        const sale = vh.reduce((a, v) => a + v.costoUnit * v.cantidad, 0);
-        const inv = ps.reduce((a, p) => a + p.precio * p.stockActual, 0);
-        const alertas = ps.map((p) => ({ p, ...estadoDe(p) })).filter((e) => e.estado === "rojo" || e.estado === "amarillo").sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado]).map((e) => ({ estado: e.estado, mensaje: `${e.p.nombre}: ${e.mensaje}` }));
-        let sem = "verde";
-        if (alertas.some((a) => a.estado === "rojo")) sem = "rojo"; else if (alertas.some((a) => a.estado === "amarillo")) sem = "amarillo";
-        return J({ semaforoGeneral: sem, resumenDia: { entra: +entra.toFixed(2), sale: +sale.toFixed(2), gananciaHoy: +(entra - sale).toFixed(2), inventarioValorizado: +inv.toFixed(2), ventasCount: vh.length }, alertas });
-      }
-
-      if (path === "/api/productos" && (!opts || opts.method !== "POST")) {
-        let lista = filtrar(uid).map((p) => { const e = estadoDe(p); return { id: p.id, nombre: p.nombre, categoria: p.categoria, sku: p.sku, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, precio: p.precio, perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: e.dias, umbralRojo: p.umbralRojo }; });
-        const est = q.get("estado");
-        if (est) lista = lista.filter((x) => x.estado === est);
-        lista.sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado] || a.nombre.localeCompare(b.nombre, "es"));
-        return J(lista);
-      }
-
-      if (path === "/api/productos" && opts && opts.method === "POST") {
-        if (!body.nombre || !body.barcode) return J({ error: "Falta el nombre o el código de barras." }, 400);
-        if (body.perecible && !body.fechaCaducidad) return J({ error: "Si el producto expira, indica su fecha de caducidad." }, 400);
-        const nuevo = {
-          id: "p" + Math.random().toString(36).slice(2, 9), nombre: body.nombre, categoria: body.categoria || "General",
-          sku: body.sku || body.barcode, barcode: body.barcode, ubicacionId: body.ubicacionId || "todas",
-          precio: Number(body.precio) || 0, costo: Number(body.costo) || 0, stockActual: Number(body.stockInicial) || 0,
-          umbralRojo: Number(body.umbralRojo) || 5, umbralAmarillo: Number(body.umbralAmarillo) || 10, proveedor: body.proveedor || "",
-          perecible: !!body.perecible, fechaCaducidad: body.perecible ? (body.fechaCaducidad || null) : null,
-          metodoCosteo: body.metodoCosteo === "LIFO" ? "LIFO" : "FIFO",
-        };
-        productos.push(nuevo);
-        mov("alta", { producto: nuevo.nombre, sku: nuevo.sku, ubicacion: nombreUbic(nuevo.ubicacionId) });
-        return J(ficha(nuevo));
-      }
-
-      let m;
-      if ((m = path.match(/^\/api\/productos\/([^/]+)\/venta$/))) {
-        const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);
-        const cant = Number.isInteger(body.cantidad) && body.cantidad > 0 ? body.cantidad : 1;
-        if (p.stockActual < cant) return J({ error: `No hay suficiente stock disponible (quedan ${p.stockActual}).` }, 400);
-        p.stockActual -= cant;
-        const ventaId = String(Date.now() + Math.random());
-        ventas.push({ id: ventaId, productoId: p.id, ubicacionId: p.ubicacionId, cantidad: cant, precioUnit: p.precio, costoUnit: p.costo, fecha: new Date().toISOString() });
-        mov("venta", { producto: p.nombre, cantidad: cant, total: +(p.precio * cant).toFixed(2), ubicacion: nombreUbic(p.ubicacionId) });
-        return J({ producto: ficha(p), ventaId });
-      }
-      if ((m = path.match(/^\/api\/ventas\/([^/]+)\/anular$/))) {
-        const idx = ventas.findIndex((v) => v.id === m[1]);
-        if (idx === -1) return J({ error: "Esta venta ya no se puede anular (pasó el tiempo o ya se anuló)." }, 400);
-        const venta = ventas[idx];
-        const p = productos.find((x) => x.id === venta.productoId);
-        if (!p) return J({ error: "Producto no encontrado." }, 404);
-        p.stockActual += venta.cantidad;
-        ventas.splice(idx, 1);
-        mov("anulacion", { producto: p.nombre, cantidad: venta.cantidad, ubicacion: nombreUbic(p.ubicacionId) });
-        return J({ producto: ficha(p) });
-      }
-      if ((m = path.match(/^\/api\/productos\/([^/]+)\/ajustar$/))) {
-        const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);
-        const d = Number.isInteger(body.delta) ? body.delta : 0;
-        if (p.stockActual + d < 0) return J({ error: `Ese ajuste dejaría el stock en negativo (actual: ${p.stockActual}).` }, 400);
-        p.stockActual += d;
-        mov("ajuste", { producto: p.nombre, delta: d, motivo: body.motivo || "Ajuste manual", stockResultante: p.stockActual, ubicacion: nombreUbic(p.ubicacionId) });
-        return J(ficha(p));
-      }
-      if ((m = path.match(/^\/api\/productos\/([^/]+)\/etiqueta$/))) {
-        const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);
-        // Barcode: generado local con window.OCBarcode (barcode128.js), cero llamadas
-        // externas. QR: sigue usando la API pública qrserver.com solo en esta demo
-        // estática (el backend real lo genera 100% local con la librería "qrcode").
-        const barcodeSvg = window.OCBarcode ? window.OCBarcode.code128SVG(p.barcode, { width: 300, height: 80 }) : "";
-        return J({ producto: ficha(p), qrDataUrl: qrDataUrl(JSON.stringify({ id: p.id, sku: p.sku, barcode: p.barcode })), barcodeSvg });
-      }
-      if ((m = path.match(/^\/api\/productos\/([^/]+)$/))) {
-        const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);
-        return J(ficha(p));
-      }
-
-      if (path === "/api/escanear") {
-        const c = String(body.codigo || "").trim().toLowerCase();
-        if (!c) return J({ error: "Código vacío." }, 400);
-        const p = productos.find((x) => String(x.barcode).toLowerCase() === c || String(x.sku).toLowerCase() === c);
-        if (!p) return J({ error: "No se encontró ningún producto con ese código." }, 404);
-        return J(ficha(p));
-      }
-
-      if (path === "/api/actividad") return J(movimientos.slice().reverse().slice(0, 100));
-
-      if ((m = path.match(/^\/api\/productos\/([^/]+)\/umbrales$/))) {
-        const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);
-        const umbralRojo = Number(body.umbralRojo);
-        if (!Number.isInteger(umbralRojo) || umbralRojo < 1) return J({ error: "El umbral debe ser un número entero de al menos 1." }, 400);
-        p.umbralRojo = umbralRojo;
-        p.umbralAmarillo = umbralRojo * 2;
-        return J(ficha(p));
-      }
-
-      if (path === "/api/respaldo/exportar") {
-        return J({ modo: "demo-estatico", ubicaciones, productos, ventas, movimientos, configuracion: { gastosMensuales } });
-      }
-      if (path === "/api/respaldo/importar") {
-        try {
-          if (!body.productos || !body.ubicaciones) return J({ error: "El archivo no parece un respaldo válido." }, 400);
-          productos.length = 0; productos.push(...body.productos);
-          ubicaciones.length = 0; ubicaciones.push(...body.ubicaciones);
-          ventas.length = 0; ventas.push(...(body.ventas || []));
-          movimientos.length = 0; movimientos.push(...(body.movimientos || []));
-          if (body.configuracion && body.configuracion.gastosMensuales) {
-            Object.keys(gastosMensuales).forEach((k) => delete gastosMensuales[k]);
-            Object.assign(gastosMensuales, body.configuracion.gastosMensuales);
-          }
-          return J({ ok: true });
-        } catch (e) { return J({ error: "No se pudo importar: " + String(e) }, 400); }
-      }
-
-      if (path === "/api/configuracion/gastos" && (!opts || opts.method !== "POST")) {
-        if (!uid || uid === "todas") return J({ ubicacionId: "todas", gastosMensuales: +Object.values(gastosMensuales).reduce((a, v) => a + v, 0).toFixed(2), porUbicacion: gastosMensuales });
-        return J({ ubicacionId: uid, gastosMensuales: gastosMensuales[uid] || 0 });
-      }
-      if (path === "/api/configuracion/gastos") {
-        const { ubicacionId, gastosMensuales: g } = body; const monto = Number(g);
-        // "todas" es válido: ubicaciones está DORMANT en Olimpo (selector oculto,
-        // siempre vale "todas"), así que el negocio opera como una sola tienda
-        // virtual bajo esa clave. Ver la misma nota en server.js.
-        if (!ubicacionId) return J({ error: "Falta la ubicación." }, 400);
-        if (!isFinite(monto) || monto < 0) return J({ error: "El monto debe ser un número igual o mayor a 0." }, 400);
-        gastosMensuales[ubicacionId] = +monto.toFixed(2);
-        return J({ ubicacionId, gastosMensuales: gastosMensuales[ubicacionId] });
-      }
-
-      if (path === "/api/reportes/pl") {
-        const vh = ventasHoyDe(uid);
-        const ing = vh.reduce((a, v) => a + v.precioUnit * v.cantidad, 0);
-        const cv = vh.reduce((a, v) => a + v.costoUnit * v.cantidad, 0);
-        const gm = (!uid || uid === "todas") ? Object.values(gastosMensuales).reduce((a, v) => a + v, 0) : (gastosMensuales[uid] || 0);
-        const go = +(gm / diasEnMesActual()).toFixed(2);
-        return J({ ingresos: +ing.toFixed(2), costoVentas: +cv.toFixed(2), utilidadBruta: +(ing - cv).toFixed(2), gastosOperativos: go, utilidadNeta: +(ing - cv - go).toFixed(2) });
-      }
-      if (path === "/api/reportes/balance") {
-        const ps = filtrar(uid), vh = ventasHoyDe(uid);
-        const ef = vh.reduce((a, v) => a + v.precioUnit * v.cantidad, 0);
-        const inv = ps.reduce((a, p) => a + p.precio * p.stockActual, 0);
-        return J({ activos: { efectivoEstimado: +ef.toFixed(2), inventarioValorizado: +inv.toFixed(2), total: +(ef + inv).toFixed(2) } });
-      }
-      if (path === "/api/reportes/valorizado") {
-        const filas = filtrar(uid).map((p) => ({ nombre: p.nombre, stockActual: p.stockActual, valorCosto: +(p.costo * p.stockActual).toFixed(2), valorVenta: +(p.precio * p.stockActual).toFixed(2), utilidadPotencial: +((p.precio - p.costo) * p.stockActual).toFixed(2) }));
-        const t = filas.reduce((a, f) => ({ valorCosto: a.valorCosto + f.valorCosto, valorVenta: a.valorVenta + f.valorVenta, utilidadPotencial: a.utilidadPotencial + f.utilidadPotencial }), { valorCosto: 0, valorVenta: 0, utilidadPotencial: 0 });
-        return J({ productos: filas, totales: { valorCosto: +t.valorCosto.toFixed(2), valorVenta: +t.valorVenta.toFixed(2), utilidadPotencial: +t.utilidadPotencial.toFixed(2) } });
-      }
-
-      return J({ error: "Ruta no encontrada en la demo." }, 404);
-    } catch (e) {
-      return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });
-    }
-  };
-})();
-
-</script>
 <script>
 const API = "/api";
 let ubicaciones = [];
@@ -2528,6 +2223,66 @@ const EMAILJS_CONFIG = {
       </div>`;
     vista.appendChild(gestion);
 
+    // --- Conectar Loyverse + reseteo maestro (solo con backend real, no en
+    // la demo estática — ver window.OC_DEMO en mock-backend.js) ---
+    if (!window.OC_DEMO) {
+      const loy = document.createElement("div");
+      loy.className = "panel-escaner tag-card";
+      loy.style.cssText = "text-align:left;margin-top:22px;";
+      loy.innerHTML = `
+        <h3 class="seccion" style="margin-top:0;">Conectar Loyverse</h3>
+        <p style="font-size:14px;color:var(--ink-soft);margin-top:0;" id="oc-loy-estado">Cargando estado…</p>
+        <input id="oc-loy-token" type="password" placeholder="Access Token de Loyverse" style="width:100%;padding:10px;border:2px solid var(--azul-medio);border-radius:5px;font-family:var(--font-mono);margin-top:6px;">
+        <button id="oc-loy-guardar" class="ir" style="margin-top:10px;background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">Guardar y conectar</button>
+        <p id="oc-loy-msg" style="font-size:14px;margin-top:8px;font-weight:700;"></p>
+      `;
+      vista.appendChild(loy);
+
+      fetch(`${API}/config/loyverse`).then((r) => r.json()).then((s) => {
+        $("oc-loy-estado").textContent = s.modoActual === "loyverse"
+          ? "✅ Conectado a Loyverse. Los datos que ves vienen de tu cuenta real."
+          : s.tokenGuardado
+            ? "Token guardado pero el servidor no se ha reiniciado todavía — reinícialo para activar Loyverse."
+            : "Sin conectar. Estás viendo datos de ejemplo. Pega tu Access Token de Loyverse (Back Office → Settings → Access Tokens) para conectar tu cuenta real.";
+      }).catch(() => { $("oc-loy-estado").textContent = "No se pudo consultar el estado."; });
+
+      $("oc-loy-guardar").addEventListener("click", async () => {
+        const token = $("oc-loy-token").value.trim();
+        if (!token) { msg("oc-loy-msg", "Pega tu Access Token primero.", "var(--rojo)"); return; }
+        const res = await fetch(`${API}/config/loyverse`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }) });
+        const r = await res.json();
+        if (!res.ok) { msg("oc-loy-msg", r.error, "var(--rojo)"); return; }
+        $("oc-loy-token").value = "";
+        msg("oc-loy-msg", r.mensaje, "var(--verde)");
+      });
+
+      // --- Reseteo maestro: SOLO JFC conoce esta clave. No confundir con la
+      // subclave contable ni con el código maestro del correo — este vive
+      // 100% del lado del servidor (nunca en el JS que el navegador puede
+      // leer), es la última salida si un dueño queda bloqueado por completo.
+      const master = document.createElement("div");
+      master.className = "panel-escaner tag-card";
+      master.style.cssText = "text-align:left;margin-top:22px;border-color:var(--rust);";
+      master.innerHTML = `
+        <h3 class="seccion" style="margin-top:0;color:var(--rust);">Zona de reseteo maestro</h3>
+        <p style="font-size:14px;color:var(--ink-soft);margin-top:0;">Reservado. Borra la conexión de Loyverse guardada y limpia el acceso local (claves y correo) para empezar de cero.</p>
+        <input id="oc-master-clave" type="password" placeholder="Clave maestra" style="width:160px;padding:10px;border:2px solid var(--rust);border-radius:5px;font-family:var(--font-mono);text-align:center;">
+        <button id="oc-master-ir" class="ir" style="margin-top:10px;background:var(--rust);color:var(--blanco-calido);border-color:var(--rust-deep);">Ejecutar reseteo</button>
+        <p id="oc-master-msg" style="font-size:14px;margin-top:8px;font-weight:700;"></p>
+      `;
+      vista.appendChild(master);
+
+      $("oc-master-ir").addEventListener("click", async () => {
+        const clave = $("oc-master-clave").value.trim();
+        if (!confirm("Esto borra la conexión de Loyverse y el acceso local guardado. ¿Continuar?")) return;
+        const res = await fetch(`${API}/config/reset-maestro`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave }) });
+        const r = await res.json();
+        if (!res.ok) { msg("oc-master-msg", r.error, "var(--rojo)"); return; }
+        if (r.limpiarLocalStorage) localStorage.removeItem("oc_secure");
+        msg("oc-master-msg", r.mensaje, "var(--verde)");
+      });
+    }
+
     window.OCAuth.listo().then(() => { pintarEmail(); });
 
     // Cambiar los 3 PINs rota TODO (nuevo salt + nuevos hashes). Por eso se
@@ -2690,12 +2445,13 @@ const EMAILJS_CONFIG = {
 // auth-ui.js (escucha el evento "oc-login" para saber qué rol mostrar y para
 // encontrar el botón #oc-logout, debajo del cual se inserta este enlace).
 //
-// FEATURE — DORMANT (desactivado por JFC, 2026-06-30: "es optativo y se
-// mantiene off, es apenas recursivo"). El código queda intacto y listo, solo
-// no se muestra. Para REACTIVAR: cambiar AYUDA_HABILITADA a true. NO BORRAR
-// el resto del archivo.
+// REACTIVADO 2026-07-01 (JFC): es indispensable, sobre todo porque el
+// timeout de inactividad expira solo y el usuario no siempre hace login/
+// logout entre roles como para "descubrir" la ayuda por accidente. Estuvo
+// apagado brevemente por instrucción explícita anterior; se corrige aquí.
+// NUNCA quitar/ocultar esto de nuevo sin que JFC lo pida en el mismo turno.
 (function () {
-  const AYUDA_HABILITADA = false;
+  const AYUDA_HABILITADA = true;
   if (!AYUDA_HABILITADA) return;
 
   const css = document.createElement("style");

@@ -1,10 +1,35 @@
 // loyverse.js — Cliente de la API de Loyverse + caché de catálogo.
-// Activo solo si existe process.env.LOYVERSE_TOKEN. Si no existe, server.js
-// usa db.js (datos de demo locales) en su lugar — así el proyecto sigue
-// funcionando sin token para seguir desarrollando/mostrando la UI.
+// Activo solo si hay un token configurado. Si no existe, server.js usa db.js
+// (datos de demo locales) en su lugar — así el proyecto sigue funcionando
+// sin token para seguir desarrollando/mostrando la UI.
+//
+// DOS formas de configurar el token (JFC, 2026-07-01 — "que José tome total
+// control"): (a) variable de entorno LOYVERSE_TOKEN (para quien despliega
+// vía hosting con env vars), o (b) un archivo local data/loyverse-token.json
+// que José mismo escribe desde Avanzado → "Conectar Loyverse" en la app,
+// sin tocar código ni consola. El archivo gana si ambos existen (es la ruta
+// pensada para el dueño real, no para el desarrollador). Cualquiera de las
+// dos requiere REINICIAR el servidor para tomar efecto — MODO_LOYVERSE en
+// data.js se calcula una sola vez al arrancar el proceso.
+const fs = require("fs");
+const path = require("path");
+const ARCHIVO_TOKEN = path.join(__dirname, "data", "loyverse-token.json");
+
+function leerTokenArchivo() {
+  try { return JSON.parse(fs.readFileSync(ARCHIVO_TOKEN, "utf8")).token || null; }
+  catch { return null; }
+}
+function guardarToken(token) {
+  const dir = path.join(__dirname, "data");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+  fs.writeFileSync(ARCHIVO_TOKEN, JSON.stringify({ token: String(token || "").trim() }, null, 2));
+}
+function borrarToken() {
+  if (fs.existsSync(ARCHIVO_TOKEN)) fs.unlinkSync(ARCHIVO_TOKEN);
+}
 
 const BASE = "https://api.loyverse.com/v1.0";
-const TOKEN = process.env.LOYVERSE_TOKEN;
+const TOKEN = leerTokenArchivo() || process.env.LOYVERSE_TOKEN;
 
 function activo() {
   return Boolean(TOKEN);
@@ -168,4 +193,4 @@ async function getVentasHoy(storeId, fechaISO) {
   return ventas;
 }
 
-module.exports = { activo, getUbicaciones, getProductos, ajustarStock, getVentasHoy, refrescarCatalogo };
+module.exports = { activo, getUbicaciones, getProductos, ajustarStock, getVentasHoy, refrescarCatalogo, guardarToken, borrarToken, tieneTokenGuardado: () => !!leerTokenArchivo() };
