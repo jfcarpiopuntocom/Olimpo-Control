@@ -31,6 +31,12 @@ function hoyISO() {
   return f.format(new Date()); // en-CA -> YYYY-MM-DD
 }
 
+// Días reales del mes actual (28/29/30/31), no un fijo "30" — ver misma nota en POSCuenca/server.js.
+function diasEnMesActual() {
+  const [anio, mes] = hoyISO().split("-").map(Number);
+  return new Date(anio, mes, 0).getDate();
+}
+
 // ---------- Helpers de negocio ----------
 // Días entre hoy (Ecuador) y una fecha "YYYY-MM-DD". Negativo = ya venció.
 function diasParaVencer(fechaCaducidad) {
@@ -259,6 +265,21 @@ app.get("/api/actividad", (req, res) => {
   res.json(data.getActividad());
 });
 
+// --- Respaldo exportable/importable (tronco 3) ---
+// NOTA DE SEGURIDAD: estos endpoints no tienen su propia autenticación en el
+// servidor (todo el auth de esta app es del lado del cliente, ver
+// crypto-store.js) — igual que el resto de la API hoy. La protección real es
+// que el botón solo aparece en la UI detrás de la subclave contable. Si esto
+// se despliega donde importa más aislamiento, hay que agregar un guard aquí.
+app.get("/api/respaldo/exportar", (req, res) => {
+  res.json(data.exportarTodo());
+});
+app.post("/api/respaldo/importar", (req, res) => {
+  const r = data.importarTodo(req.body);
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json({ ok: true });
+});
+
 // --- Configuración: gastos mensuales (siempre local, sin importar el modo) ---
 app.get("/api/configuracion/gastos", (req, res) => {
   res.json(data.getGastosMensuales(req.query.ubicacionId));
@@ -300,7 +321,7 @@ app.get("/api/reportes/pl", asyncRoute(async (req, res) => {
   const utilidadBruta = ingresos - costoVentas;
 
   const { gastosMensuales } = data.getGastosMensuales(ubicacionId);
-  const gastosOperativos = Number((gastosMensuales / 30).toFixed(2));
+  const gastosOperativos = Number((gastosMensuales / diasEnMesActual()).toFixed(2));
   const utilidadNeta = utilidadBruta - gastosOperativos;
 
   res.json({

@@ -730,6 +730,14 @@
         <div class="etiqueta">Tu inventario vale</div>
         <div class="valor" id="resInventario">$0.00</div>
       </div>
+      <div class="tarjeta tag-card">
+        <div class="etiqueta">Ventas hoy</div>
+        <div class="valor" id="resVentasCount">0</div>
+      </div>
+      <div class="tarjeta tag-card">
+        <div class="etiqueta">Venta promedio</div>
+        <div class="valor" id="resTicketProm">$0.00</div>
+      </div>
     </div>
 
     <h3 class="seccion">Alertas de hoy</h3>
@@ -872,6 +880,10 @@
   const ZONA = "America/Guayaquil";
   function hoyISO() {
     return new Intl.DateTimeFormat("en-CA", { timeZone: ZONA, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  }
+  function diasEnMesActual() {
+    const [anio, mes] = hoyISO().split("-").map(Number);
+    return new Date(anio, mes, 0).getDate();
   }
 
   const ubicaciones = [
@@ -1048,6 +1060,24 @@
 
       if (path === "/api/actividad") return J(movimientos.slice().reverse().slice(0, 100));
 
+      if (path === "/api/respaldo/exportar") {
+        return J({ modo: "demo-estatico", ubicaciones, productos, ventas, movimientos, configuracion: { gastosMensuales } });
+      }
+      if (path === "/api/respaldo/importar") {
+        try {
+          if (!body.productos || !body.ubicaciones) return J({ error: "El archivo no parece un respaldo válido." }, 400);
+          productos.length = 0; productos.push(...body.productos);
+          ubicaciones.length = 0; ubicaciones.push(...body.ubicaciones);
+          ventas.length = 0; ventas.push(...(body.ventas || []));
+          movimientos.length = 0; movimientos.push(...(body.movimientos || []));
+          if (body.configuracion && body.configuracion.gastosMensuales) {
+            Object.keys(gastosMensuales).forEach((k) => delete gastosMensuales[k]);
+            Object.assign(gastosMensuales, body.configuracion.gastosMensuales);
+          }
+          return J({ ok: true });
+        } catch (e) { return J({ error: "No se pudo importar: " + String(e) }, 400); }
+      }
+
       if (path === "/api/configuracion/gastos" && (!opts || opts.method !== "POST")) {
         if (!uid || uid === "todas") return J({ ubicacionId: "todas", gastosMensuales: +Object.values(gastosMensuales).reduce((a, v) => a + v, 0).toFixed(2), porUbicacion: gastosMensuales });
         return J({ ubicacionId: uid, gastosMensuales: gastosMensuales[uid] || 0 });
@@ -1068,7 +1098,7 @@
         const ing = vh.reduce((a, v) => a + v.precioUnit * v.cantidad, 0);
         const cv = vh.reduce((a, v) => a + v.costoUnit * v.cantidad, 0);
         const gm = (!uid || uid === "todas") ? Object.values(gastosMensuales).reduce((a, v) => a + v, 0) : (gastosMensuales[uid] || 0);
-        const go = +(gm / 30).toFixed(2);
+        const go = +(gm / diasEnMesActual()).toFixed(2);
         return J({ ingresos: +ing.toFixed(2), costoVentas: +cv.toFixed(2), utilidadBruta: +(ing - cv).toFixed(2), gastosOperativos: go, utilidadNeta: +(ing - cv - go).toFixed(2) });
       }
       if (path === "/api/reportes/balance") {
@@ -1161,6 +1191,9 @@ async function cargarHoy(){
   document.getElementById("resSale").textContent = fmtMoney(data.resumenDia.sale);
   document.getElementById("resGanancia").textContent = fmtMoney(data.resumenDia.gananciaHoy);
   document.getElementById("resInventario").textContent = fmtMoney(data.resumenDia.inventarioValorizado);
+  document.getElementById("resVentasCount").textContent = data.resumenDia.ventasCount;
+  const ticketProm = data.resumenDia.ventasCount > 0 ? data.resumenDia.entra / data.resumenDia.ventasCount : 0;
+  document.getElementById("resTicketProm").textContent = fmtMoney(ticketProm);
 
   const puntito = (color) => `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:currentColor;margin-right:9px;flex-shrink:0;"></span>`;
   const lista = document.getElementById("listaAlertas");
@@ -1234,7 +1267,35 @@ async function ejecutarEscaneo(){
   }
   const p = await res.json();
   pintarFicha(p);
+  sonarBeepExito();
 }
+
+let audioCtxBeep = null;
+function sonarBeepExito(){
+  try {
+    audioCtxBeep = audioCtxBeep || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtxBeep.createOscillator();
+    const gain = audioCtxBeep.createGain();
+    osc.type = "sine"; osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, audioCtxBeep.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtxBeep.currentTime + 0.12);
+    osc.connect(gain); gain.connect(audioCtxBeep.destination);
+    osc.start(); osc.stop(audioCtxBeep.currentTime + 0.12);
+  } catch (e) { /* Audio API no disponible: silencioso, no rompe el escaneo */ }
+}
+
+let refocoTimer = null;
+document.getElementById("inputEscaner").addEventListener("blur", () => {
+  clearTimeout(refocoTimer);
+  refocoTimer = setTimeout(() => {
+    const vistaActiva = document.getElementById("vista-escanear");
+    const activo = document.activeElement;
+    const otroInputEnfocado = activo && activo !== document.body && activo.id !== "inputEscaner" && (activo.tagName === "INPUT" || activo.tagName === "SELECT" || activo.tagName === "TEXTAREA");
+    if (vistaActiva && vistaActiva.classList.contains("activa") && !otroInputEnfocado) {
+      document.getElementById("inputEscaner").focus();
+    }
+  }, 2000);
+});
 
 function mostrarFormNuevoProducto(codigoEscaneado){
   const contenedor = document.getElementById("fichaResultado");
@@ -1410,14 +1471,98 @@ async function abrirEtiqueta(id){
     <div class="precio-grande">${fmtMoney(p.precio)}</div>
     ${p.perecible && p.fechaCaducidad ? `<div style="font-size:13px;font-weight:700;color:var(--rust);">Vence: ${p.fechaCaducidad}</div>` : ""}
     <div class="codigo">${p.barcode}</div>
-    <div class="barras">${data.barcodeSvg || ""}</div>
+    <div class="barras" id="barrasClicable" style="cursor:pointer;position:relative;" title="Toca para imprimir o guardar solo el código de barras">${data.barcodeSvg || ""}</div>
+    <div style="font-size:11px;color:var(--azul-medio,#2c4a68);margin-top:-6px;">👆 Toca el código de barras para imprimirlo o guardarlo solo</div>
     <img src="${data.qrDataUrl}" width="160" height="160" alt="QR del producto">
     <div style="font-size:13px; color:var(--azul-medio);">Escanea para ver la ficha completa</div>
     <br>
-    <button class="imprimir" onclick="window.print()">Imprimir</button>
+    <button class="imprimir" onclick="window.print()">Imprimir etiqueta completa</button>
   `;
   document.getElementById("modalEtiqueta").classList.add("activo");
   document.getElementById("cerrarModal2").addEventListener("click", cerrarModalEtiqueta);
+  document.getElementById("barrasClicable").addEventListener("click", (e) => mostrarMenuBarcode(e, data.barcodeSvg, p));
+}
+
+// ---------------------------------------------------------------------------
+// Menú de acciones SOLO para el código de barras (pedido de JFC: "botón para
+// imprimir/guardar el código de barras por sí solo... intuitivo"). Tocar el
+// barcode dentro del modal de etiqueta abre un mini-menú flotante con dos
+// acciones, en vez de forzar a imprimir la etiqueta completa cuando lo único
+// que hace falta es el código suelto (ej. para pegarlo en una caja grande).
+// ---------------------------------------------------------------------------
+function mostrarMenuBarcode(e, svgBarcode, producto){
+  document.getElementById("oc-menu-barcode")?.remove();
+  const menu = document.createElement("div");
+  menu.id = "oc-menu-barcode";
+  menu.style.cssText = "position:fixed;z-index:10000;background:var(--blanco-calido,#fbf5e8);border:2px solid var(--brass,#9c7a35);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.35);padding:8px;display:flex;flex-direction:column;gap:4px;min-width:220px;";
+  const rect = e.target.closest("#barrasClicable").getBoundingClientRect();
+  menu.style.left = Math.max(8, rect.left) + "px";
+  menu.style.top = (rect.bottom + 8) + "px";
+  menu.innerHTML = `
+    <button id="oc-mb-imprimir" style="text-align:left;padding:10px;border:none;background:transparent;border-radius:5px;cursor:pointer;font-size:14px;color:var(--ink,#211c14);">🖨️ Imprimir solo el código</button>
+    <button id="oc-mb-guardar" style="text-align:left;padding:10px;border:none;background:transparent;border-radius:5px;cursor:pointer;font-size:14px;color:var(--ink,#211c14);">💾 Guardar como imagen</button>
+  `;
+  document.body.appendChild(menu);
+  const cerrar = (ev) => { if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener("click", cerrar, true); } };
+  setTimeout(() => document.addEventListener("click", cerrar, true), 0);
+
+  document.getElementById("oc-mb-imprimir").addEventListener("click", () => {
+    menu.remove();
+    imprimirSoloBarcode(svgBarcode, producto);
+  });
+  document.getElementById("oc-mb-guardar").addEventListener("click", () => {
+    menu.remove();
+    guardarBarcodeComoImagen(svgBarcode, producto);
+  });
+}
+
+// Imprime SOLO el código de barras (más el nombre/código como referencia),
+// usando una hoja aparte vía un iframe oculto — no un popup, que muchos
+// navegadores/tablets bloquean por defecto.
+function imprimirSoloBarcode(svgBarcode, producto){
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head><title>${producto.nombre}</title><style>
+    body{margin:0;padding:24px;text-align:center;font-family:sans-serif;}
+    svg{max-width:100%;height:auto;}
+    p{font-size:14px;margin-top:8px;letter-spacing:2px;}
+  </style></head><body>${svgBarcode}<p>${producto.barcode}</p></body></html>`);
+  doc.close();
+  iframe.onload = () => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => iframe.remove(), 1000);
+  };
+}
+
+// Convierte el SVG del barcode a PNG (via canvas) y dispara la descarga.
+// Todo en el navegador, sin backend ni servicio externo.
+function guardarBarcodeComoImagen(svgBarcode, producto){
+  const svgBlob = new Blob([svgBarcode], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+  const img = new Image();
+  img.onload = () => {
+    const escala = 3; // más resolución que el SVG base, para que imprima nítido
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width * escala;
+    canvas.height = img.height * escala;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    canvas.toBlob((blob) => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `barcode-${producto.sku || producto.barcode}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }, "image/png");
+  };
+  img.src = url;
 }
 
 function cerrarModalEtiqueta(){
@@ -1506,7 +1651,7 @@ async function cargarAvanzado(){
 
   document.getElementById("tablaBalance").innerHTML = `
     <tr><th>Concepto</th><th>Monto</th></tr>
-    <tr><td>Efectivo estimado</td><td>${fmtMoney(balance.activos.efectivoEstimado)}</td></tr>
+    <tr><td>Ingresos del día estimados</td><td>${fmtMoney(balance.activos.efectivoEstimado)}</td></tr>
     <tr><td>Inventario valorizado</td><td>${fmtMoney(balance.activos.inventarioValorizado)}</td></tr>
     <tr><td><strong>Total activos</strong></td><td><strong>${fmtMoney(balance.activos.total)}</strong></td></tr>
   `;

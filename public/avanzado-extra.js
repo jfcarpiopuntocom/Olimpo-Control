@@ -36,6 +36,27 @@
       if (wrap) cont.appendChild(wrap);
     });
 
+    // --- Respaldo exportable/importable (tronco 3, JFC 2026-07-01) ---
+    // Vive DENTRO de "cont" (detrás de la subclave contable): exportar/
+    // importar el negocio completo es una acción sensible, no debe estar al
+    // alcance de un empleado ni de cualquiera que abra Avanzado.
+    const respaldo = document.createElement("div");
+    respaldo.className = "tag-card";
+    respaldo.style.cssText = "text-align:left;margin-top:22px;";
+    respaldo.innerHTML = `
+      <h3 class="seccion" style="margin-top:0;">Respaldo</h3>
+      <p style="font-size:14px;color:var(--ink-soft);margin-top:0;">
+        Descarga TODO tu negocio (productos, ventas, movimientos, gastos, claves) en un archivo. Guárdalo en tu correo, tu Drive, donde sea — es tu copia de seguridad si se borra el caché o se daña el dispositivo.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="oc-exportar" class="ir" style="background:var(--azul-medio);color:var(--blanco-calido);border-color:var(--azul-oscuro);">⬇️ Exportar respaldo</button>
+        <label class="ir" style="background:var(--rust);color:var(--blanco-calido);border-color:var(--rust-deep);display:inline-flex;align-items:center;cursor:pointer;">⬆️ Importar respaldo
+          <input id="oc-importar-file" type="file" accept=".json" style="display:none;">
+        </label>
+      </div>
+      <p id="oc-respaldo-msg" style="font-size:14px;margin-top:10px;font-weight:700;"></p>
+    `;
+    cont.appendChild(respaldo);
+
     // --- Candado ---
     const lock = document.createElement("div");
     lock.id = "oc-acct-lock";
@@ -94,6 +115,39 @@
       await window.OCSecure.guardarSecreto(o, [e], a, correoActual);
       $("oc-c-owner").value = ""; $("oc-c-emp").value = ""; $("oc-c-acct").value = "";
       msg("oc-codes-msg", "Claves guardadas y cifradas.", "var(--verde)");
+    });
+
+    // El respaldo incluye TANTO los datos del negocio (server/mock, vía
+    // /api/respaldo/exportar) COMO el estado de acceso cifrado
+    // (localStorage["oc_secure"]: hashes de PIN + correo) — sin esto último,
+    // restaurar en otra tablet dejaría al dueño sin sus propias claves.
+    $("oc-exportar").addEventListener("click", async () => {
+      try {
+        const datos = await (await fetch(`${API}/respaldo/exportar`)).json();
+        const paquete = { fecha: new Date().toISOString(), datos, oc_secure: localStorage.getItem("oc_secure") };
+        const blob = new Blob([JSON.stringify(paquete, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `respaldo-olimpo-control-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        msg("oc-respaldo-msg", "Respaldo descargado. Guárdalo en un lugar seguro.", "var(--verde)");
+      } catch (e) { msg("oc-respaldo-msg", "No se pudo exportar: " + e.message, "var(--rojo)"); }
+    });
+
+    $("oc-importar-file").addEventListener("change", async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      try {
+        const paquete = JSON.parse(await file.text());
+        if (!paquete.datos) { msg("oc-respaldo-msg", "Ese archivo no parece un respaldo de Olimpo Control.", "var(--rojo)"); return; }
+        if (!confirm("Esto REEMPLAZA todos los datos actuales (productos, ventas, claves) con los del respaldo. ¿Continuar?")) return;
+        const res = await fetch(`${API}/respaldo/importar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(paquete.datos) });
+        const r = await res.json();
+        if (!res.ok) { msg("oc-respaldo-msg", r.error, "var(--rojo)"); return; }
+        if (paquete.oc_secure) localStorage.setItem("oc_secure", paquete.oc_secure);
+        msg("oc-respaldo-msg", "Respaldo importado. Recarga la página para ver los datos restaurados.", "var(--verde)");
+      } catch (err) { msg("oc-respaldo-msg", "No se pudo importar: " + err.message, "var(--rojo)"); }
+      e.target.value = "";
     });
   }
 
