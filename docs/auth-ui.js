@@ -30,11 +30,12 @@
 //   directamente.
 // ===========================================================================
 (function () {
-  // Pool de emojis de adorno. Se barajan; ninguno está atado a un dígito fijo.
+  // Pool de emojis de adorno — musicales y rock (apropiado para smoke shop /
+  // club). Retrocompatibles: PINs son numéricos; emojis solo adorno visual.
   const EMOJI_POOL = [
-    "🍊", "🔥", "🌵", "🐉", "🌊", "🍀", "⭐", "🌙", "☀️", "🦜",
-    "🐢", "🦋", "🌶️", "🍋", "🫐", "🎸", "🥁", "🎺", "🏔️", "🛶",
-    "🚲", "🏍️", "🔑", "🌻", "🐬", "🍄",
+    "🎸", "🥁", "🎺", "🎵", "🎶", "🎤", "🎧", "🎼", "🎻", "🎹",
+    "🔥", "⚡", "💎", "🌑", "🌟", "🃏", "🎯", "🏆", "🔮", "☠️",
+    "🦇", "🌪️", "🌊", "🌀", "⭐", "🎲",
   ];
 
   // Fisher-Yates: baraja una copia del arreglo (no muta el original).
