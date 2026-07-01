@@ -120,9 +120,12 @@
     box-shadow:0 0 0 rgba(33,28,20,0);
   }
   button:disabled{
-    opacity:0.45;
+    /* sin opacity (regla JFC: texto siempre solido) — se desatura con colores */
     cursor:not-allowed;
     box-shadow:none;
+    background:#d8cdb4;
+    color:#5d5340;
+    border-color:#8a8070;
   }
 
   /* ================= HEADER ================= */
@@ -281,7 +284,6 @@
     font-size:16px;
     margin:0;
     color:var(--blanco-calido);
-    opacity:0.94;
   }
 
   /* ================= TARJETAS RESUMEN ================= */
