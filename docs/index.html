@@ -8,17 +8,17 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
   :root{
     /* --- superficies y tinta (reasignadas, mismos nombres usados por el script) --- */
-    --crema:#f3e8cd;          /* papel principal */
-    --blanco-calido:#fbf5e8;  /* papel de tarjeta */
-    --azul-oscuro:#1c3049;    /* tinta-azul de cabecera */
+    --crema:#f2e6c6;          /* papel principal */
+    --blanco-calido:#fbf6ea;  /* papel de tarjeta */
+    --azul-oscuro:#152840;    /* tinta-azul de cabecera */
     --azul-medio:#2c4a68;
-    --dorado:#9c7a35;         /* laton / acento secundario */
+    --dorado:#a17f37;         /* laton / acento secundario */
     --ambar:#b2461f;          /* terracota / precios */
-    --negro:#211c14;          /* tinta */
+    --negro:#1e1a12;          /* tinta */
     --verde:#2f7a4f;
     --verde-claro:#e3efe1;
     --amarillo:#9c6c0a;
@@ -29,46 +29,71 @@
     --azul-op-claro:#dde9f5;
 
     /* --- nuevas variables del sistema --- */
-    --paper-deep:#e8dbb6;
-    --ink:#211c14;
+    --paper-deep:#e6d7ac;
+    --ink:#1e1a12;
     --ink-soft:#5d5340;
     --rust:#b2461f;
     --rust-deep:#7e2f12;
-    --brass:#9c7a35;
+    --brass:#a17f37;
     --font-display:"Space Grotesk", "Avenir Next Condensed", sans-serif;
     --font-body:"Source Sans 3", "Segoe UI", sans-serif;
     --font-mono:"JetBrains Mono", monospace;
+    --font-serif:"Instrument Serif", "Iowan Old Style", serif;
     --nav-h:78px;
     --sidebar-w:248px;
     --header-h:104px;
   }
   *{box-sizing:border-box;}
   html{-webkit-tap-highlight-color:transparent;}
+  ::selection{ background:var(--brass); color:var(--blanco-calido); }
+  :focus-visible{ outline:2.5px solid var(--rust); outline-offset:2px; border-radius:3px; }
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-track{ background:var(--paper-deep); }
+  ::-webkit-scrollbar-thumb{ background:var(--brass); border-radius:6px; border:2px solid var(--paper-deep); }
   body{
     margin:0;
     font-family:var(--font-body);
     background-color:var(--crema);
     background-image:
-      repeating-linear-gradient(to bottom, transparent 0 31px, rgba(33,28,20,0.05) 31px 32px);
+      repeating-linear-gradient(to bottom, transparent 0 31px, rgba(33,28,20,0.05) 31px 32px),
+      radial-gradient(circle at 1px 1px, rgba(33,28,20,0.07) 1px, transparent 0);
+    background-size:auto, 3px 3px;
     color:var(--ink);
     -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
   }
 
   /* ---------- utilidad: tarjeta-etiqueta (esquina cortada + ojal) ---------- */
   .tag-card{
     position:relative;
     background:var(--blanco-calido);
-    border:1.5px solid rgba(33,28,20,0.22);
+    border:1.5px solid rgba(33,28,20,0.2);
     clip-path:polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+    box-shadow:0 1px 2px rgba(33,28,20,0.06), 0 6px 16px -8px rgba(33,28,20,0.28);
+    transition:box-shadow .2s ease, transform .2s ease;
+  }
+  .tag-card::before{
+    content:"";
+    position:absolute;
+    top:0; right:0;
+    width:18px; height:18px;
+    background:linear-gradient(135deg, transparent 49.5%, rgba(33,28,20,0.14) 50%, transparent 50.5%);
+    pointer-events:none;
   }
   .tag-card::after{
     content:"";
     position:absolute;
     top:6px; right:6px;
-    width:8px; height:8px;
+    width:7px; height:7px;
     border-radius:50%;
     background:var(--brass);
-    box-shadow:0 0 0 2px var(--blanco-calido);
+    box-shadow:0 0 0 2px var(--blanco-calido), inset 0 1px 1px rgba(0,0,0,0.35);
+  }
+  @media (hover:hover){
+    .caja.tag-card:hover, .etiqueta-card.tag-card:hover{
+      transform:translateY(-3px);
+      box-shadow:0 2px 3px rgba(33,28,20,0.08), 0 14px 26px -10px rgba(33,28,20,0.34);
+    }
   }
 
   /* ---------- botones tipo sello ---------- */
@@ -77,21 +102,33 @@
     text-transform:uppercase;
     letter-spacing:0.04em;
     border:2px solid var(--ink);
-    border-radius:5px;
+    border-radius:6px;
     background:var(--blanco-calido);
     color:var(--ink);
     box-shadow:3px 3px 0 rgba(33,28,20,0.18);
     cursor:pointer;
-    transition:transform .08s ease, box-shadow .08s ease;
+    transition:transform .1s ease, box-shadow .1s ease, background-color .15s ease;
   }
-  button:active{
+  @media (hover:hover){
+    button:not(:disabled):hover{
+      transform:translate(-1px,-1px);
+      box-shadow:4px 4px 0 rgba(33,28,20,0.2);
+    }
+  }
+  button:active:not(:disabled){
     transform:translate(2px,2px);
     box-shadow:0 0 0 rgba(33,28,20,0);
+  }
+  button:disabled{
+    opacity:0.45;
+    cursor:not-allowed;
+    box-shadow:none;
   }
 
   /* ================= HEADER ================= */
   header{
     background:var(--azul-oscuro);
+    background-image:linear-gradient(160deg, var(--azul-oscuro) 0%, #1a3454 100%);
     color:var(--blanco-calido);
     padding:18px 20px;
     min-height:var(--header-h);
@@ -104,40 +141,52 @@
     top:0;
     z-index:40;
     border-bottom:3px solid var(--brass);
+    box-shadow:0 8px 20px -10px rgba(0,0,0,0.45);
+  }
+  header::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:-3px;
+    height:1px;
+    background-image:repeating-linear-gradient(to right, rgba(251,246,234,0.35) 0 6px, transparent 6px 12px);
   }
   header .marca{
     display:flex;
     align-items:center;
-    gap:12px;
+    gap:13px;
   }
   header .sello{
-    width:42px; height:42px;
+    width:44px; height:44px;
     border-radius:50%;
     border:2px solid var(--brass);
     display:flex;
     align-items:center;
     justify-content:center;
-    font-family:var(--font-display);
-    font-weight:700;
-    font-size:17px;
+    font-family:var(--font-serif);
+    font-style:italic;
+    font-weight:400;
+    font-size:20px;
     color:var(--brass);
     flex-shrink:0;
     overflow:hidden;
     object-fit:cover;
     cursor:pointer;
     background:var(--azul-oscuro);
+    box-shadow:0 0 0 3px rgba(161,127,55,0.18), 0 3px 8px rgba(0,0,0,0.35);
+    transition:transform .15s ease;
   }
+  @media (hover:hover){ header .sello:hover{ transform:scale(1.06) rotate(-4deg); } }
   header h1{
     margin:0;
-    font-family:var(--font-display);
-    font-weight:700;
-    font-size:21px;
+    font-family:var(--font-serif);
+    font-weight:400;
+    font-size:26px;
     letter-spacing:0.01em;
   }
   header .sub{
     font-family:var(--font-mono);
     font-size:13px;
-    letter-spacing:0.04em;
+    letter-spacing:0.07em;
     color:var(--brass);
     margin-top:3px;
     text-transform:uppercase;
@@ -147,7 +196,7 @@
     font-weight:600;
     font-size:14px;
     padding:10px 14px;
-    border-radius:5px;
+    border-radius:6px;
     border:2px solid var(--brass);
     background:var(--blanco-calido);
     color:var(--azul-oscuro);
@@ -171,23 +220,30 @@
     flex-direction:column;
     align-items:center;
     justify-content:center;
-    gap:3px;
+    gap:4px;
     font-size:13px;
     font-weight:600;
-    padding:4px 2px;
+    letter-spacing:0.02em;
+    padding:6px 2px;
     min-height:44px;
     background:transparent;
     border:none;
     box-shadow:none;
     color:var(--ink-soft);
-    border-radius:6px;
+    border-radius:8px;
+    transition:background-color .15s ease, color .15s ease;
   }
-  nav button svg{ width:20px; height:20px; }
+  nav button svg{ width:20px; height:20px; transition:transform .15s ease; }
+  @media (hover:hover){
+    nav button:not(.activo):hover{ background:rgba(33,28,20,0.06); color:var(--ink); }
+  }
   nav button.activo{
     background:var(--rust);
     color:var(--blanco-calido);
+    box-shadow:0 4px 10px -3px rgba(178,70,31,0.55);
   }
-  nav button:active{ transform:scale(0.95); }
+  nav button.activo svg{ transform:scale(1.05); }
+  nav button:active{ transform:scale(0.94); }
 
   main{
     padding:18px 16px calc(var(--nav-h) + 28px);
@@ -195,29 +251,37 @@
     margin:0 auto;
   }
   .vista{display:none;}
-  .vista.activa{display:block;}
+  .vista.activa{display:block; animation:vistaEntra .32s cubic-bezier(.22,.8,.32,1);}
+  @keyframes vistaEntra{
+    from{ opacity:0; transform:translateY(8px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
 
   /* ================= HERO SEMÁFORO ================= */
   .hero-semaforo{
-    padding:26px 22px;
-    margin-bottom:18px;
+    padding:28px 24px;
+    margin-bottom:20px;
     color:var(--blanco-calido);
     border-color:rgba(255,255,255,0.35);
+    box-shadow:0 1px 2px rgba(0,0,0,0.1), 0 14px 30px -14px rgba(33,28,20,0.5);
+    background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,0.09) 1px, transparent 0);
+    background-size:14px 14px, auto;
   }
-  .hero-semaforo.verde{background:var(--verde); --tc-bg:var(--verde);}
-  .hero-semaforo.amarillo{background:#8f600c;}
-  .hero-semaforo.rojo{background:var(--rojo);}
+  .hero-semaforo.verde{background-color:var(--verde); --tc-bg:var(--verde);}
+  .hero-semaforo.amarillo{background-color:#8f600c;}
+  .hero-semaforo.rojo{background-color:var(--rojo);}
   .hero-semaforo h2{
-    margin:0 0 6px 0;
-    font-family:var(--font-display);
-    font-weight:700;
-    font-size:26px;
-    line-height:1.15;
+    margin:0 0 8px 0;
+    font-family:var(--font-serif);
+    font-weight:400;
+    font-size:34px;
+    line-height:1.12;
   }
   .hero-semaforo p{
     font-size:16px;
     margin:0;
     color:var(--blanco-calido);
+    opacity:0.94;
   }
 
   /* ================= TARJETAS RESUMEN ================= */
@@ -228,31 +292,40 @@
     margin-bottom:22px;
   }
   .tarjeta{
-    padding:14px 16px;
+    padding:15px 16px 16px;
+    border-top:3px solid var(--brass);
   }
+  .tarjeta:nth-child(1){ border-top-color:var(--verde); }
+  .tarjeta:nth-child(2){ border-top-color:var(--rust); }
+  .tarjeta:nth-child(3){ border-top-color:var(--brass); }
+  .tarjeta:nth-child(4){ border-top-color:var(--azul-op); }
+  .tarjeta:nth-child(5){ border-top-color:var(--azul-medio); }
+  .tarjeta:nth-child(6){ border-top-color:var(--amarillo); }
   .tarjeta .etiqueta{
     font-family:var(--font-mono);
     font-size:13px;
     color:var(--ink-soft);
     text-transform:uppercase;
-    letter-spacing:0.06em;
+    letter-spacing:0.07em;
   }
   .tarjeta .valor{
-    font-family:var(--font-display);
-    font-size:24px;
-    font-weight:700;
+    font-family:var(--font-serif);
+    font-size:30px;
+    font-weight:400;
     color:var(--ink);
-    margin-top:5px;
+    margin-top:4px;
   }
 
   h3.seccion{
     font-family:var(--font-display);
     font-weight:700;
-    font-size:18px;
+    font-size:16px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
     color:var(--ink);
     border-bottom:3px solid var(--brass);
-    padding-bottom:8px;
-    margin-top:28px;
+    padding-bottom:9px;
+    margin-top:30px;
   }
 
   /* ================= ALERTAS ================= */
@@ -280,7 +353,7 @@
     gap:14px;
   }
   .caja{
-    padding:15px;
+    padding:16px;
     border:2px solid transparent;
     cursor:pointer;
     min-height:44px;
@@ -291,7 +364,7 @@
   .caja.azul{background:var(--azul-op-claro); border-color:var(--azul-op);}
   .caja .nombre{
     font-family:var(--font-display);
-    font-size:16px;
+    font-size:15.5px;
     font-weight:700;
     color:var(--ink);
   }
@@ -301,10 +374,10 @@
     color:var(--ink-soft);
   }
   .caja .stock{
-    font-family:var(--font-display);
-    font-size:28px;
-    font-weight:700;
-    margin-top:6px;
+    font-family:var(--font-serif);
+    font-size:34px;
+    font-weight:400;
+    margin-top:4px;
   }
   .caja.verde .stock{color:var(--verde);}
   .caja.amarillo .stock{color:var(--amarillo);}
@@ -328,6 +401,8 @@
     box-shadow:none;
     min-height:40px;
     position:relative;
+    text-transform:none;
+    letter-spacing:0.01em;
   }
   .filtros-estado button::before{
     content:"";
@@ -346,11 +421,12 @@
   .filtros-estado button.activo{
     background:var(--azul-medio);
     color:var(--blanco-calido);
+    box-shadow:2px 2px 0 rgba(33,28,20,0.16);
   }
 
   /* ================= ESCANEAR ================= */
   .panel-escaner{
-    padding:26px 20px;
+    padding:30px 22px;
     text-align:center;
   }
   .panel-escaner p{
@@ -359,20 +435,27 @@
     margin-top:0;
   }
   .panel-escaner input{
-    font-size:18px;
-    padding:14px 16px;
+    font-size:19px;
+    padding:15px 16px;
     width:100%;
     max-width:420px;
-    border-radius:5px;
+    border-radius:6px;
     border:2px solid var(--azul-medio);
     font-family:var(--font-mono);
     text-align:center;
+    letter-spacing:0.06em;
     background:var(--crema);
     color:var(--ink);
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .panel-escaner input:focus{
+    outline:none;
+    border-color:var(--rust);
+    box-shadow:0 0 0 3px rgba(178,70,31,0.18);
   }
   .panel-escaner button.ir{
     font-size:15px;
-    padding:14px 24px;
+    padding:14px 26px;
     margin-top:14px;
     background:var(--rust);
     color:var(--blanco-calido);
@@ -380,25 +463,26 @@
     min-height:48px;
   }
   .ficha-resultado{
-    margin-top:22px;
+    margin-top:24px;
     text-align:left;
   }
 
   .ficha-producto{
-    padding:20px;
+    padding:22px;
   }
   .ficha-producto .titulo{
-    font-family:var(--font-display);
-    font-size:20px;
-    font-weight:700;
+    font-family:var(--font-serif);
+    font-size:26px;
+    font-weight:400;
     color:var(--ink);
   }
   .ficha-producto .precio{
-    font-family:var(--font-display);
-    font-size:28px;
+    font-family:var(--font-serif);
+    font-size:32px;
     color:var(--ambar);
-    font-weight:700;
-    margin:6px 0;
+    font-weight:400;
+    font-style:italic;
+    margin:4px 0 8px;
   }
   .ficha-producto .linea{
     font-size:15px;
@@ -412,10 +496,10 @@
     font-size:13px;
     font-weight:700;
     text-transform:uppercase;
-    letter-spacing:0.03em;
-    padding:6px 13px;
+    letter-spacing:0.04em;
+    padding:6px 14px;
     border-radius:20px;
-    margin-top:8px;
+    margin-top:10px;
   }
   .badge-estado.verde{background:var(--verde-claro); color:var(--verde);}
   .badge-estado.amarillo{background:var(--amarillo-claro); color:var(--amarillo);}
@@ -459,10 +543,11 @@
   }
   .etiqueta-card .precio-prod{
     color:var(--ambar);
-    font-family:var(--font-display);
-    font-weight:700;
-    font-size:19px;
-    margin:5px 0;
+    font-family:var(--font-serif);
+    font-weight:400;
+    font-style:italic;
+    font-size:24px;
+    margin:4px 0;
   }
   .etiqueta-card .sku-prod{
     font-family:var(--font-mono);
@@ -553,28 +638,31 @@
     font-size:14px;
     border-left:none;
   }
-  .tabla-wrap{ overflow-x:auto; }
+  .tabla-wrap{ overflow-x:auto; border-radius:6px; }
   table.reporte{
     width:100%;
     min-width:420px;
     border-collapse:collapse;
     background:var(--blanco-calido);
-    border:1.5px solid rgba(33,28,20,0.22);
+    border:1.5px solid rgba(33,28,20,0.2);
+    box-shadow:0 1px 2px rgba(33,28,20,0.06), 0 8px 18px -10px rgba(33,28,20,0.25);
   }
   table.reporte th, table.reporte td{
     text-align:left;
-    padding:11px 13px;
-    border-bottom:1px solid rgba(33,28,20,0.15);
+    padding:12px 14px;
+    border-bottom:1px solid rgba(33,28,20,0.13);
     font-size:14px;
   }
+  table.reporte tbody tr:nth-child(even){ background:rgba(33,28,20,0.03); }
   table.reporte th{
     background:var(--azul-medio);
+    background-image:linear-gradient(160deg, var(--azul-medio), var(--azul-oscuro));
     color:var(--blanco-calido);
     font-family:var(--font-display);
     font-weight:600;
     text-transform:uppercase;
     font-size:13px;
-    letter-spacing:0.04em;
+    letter-spacing:0.06em;
   }
 
   /* ================= ACTIVIDAD ================= */
@@ -652,9 +740,29 @@
     .hero-semaforo h2{font-size:22px;}
     nav button{font-size:13px;}
   }
+
+  /* ---------- SPLASH breve de arranque (marca ~0.8s y se desvanece) ---------- */
+  #oc-splash{position:fixed;inset:0;background:var(--azul-oscuro);display:flex;align-items:center;justify-content:center;z-index:999;transition:opacity .45s ease;}
+  #oc-splash span{font-family:var(--font-serif);font-style:italic;font-size:46px;color:#fbf6ea;-webkit-text-fill-color:#fbf6ea;letter-spacing:0.01em;}
+  #oc-splash.fuera{opacity:0;pointer-events:none;}
+  /* ---------- Landscape en telefonos: compactar header/hero para aprovechar alto ---------- */
+  @media (orientation:landscape) and (max-height:520px){
+    header{min-height:64px;padding:10px 20px;}
+    .hero-semaforo{padding:14px 20px;margin-bottom:12px;}
+    .hero-semaforo h2{font-size:24px;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .vista.activa{animation:none;}
+    #oc-splash{transition:none;}
+    .tag-card, button, nav button svg{transition:none;}
+  }
 </style>
 </head>
 <body>
+
+<!-- Splash brevisimo de arranque: dice "Olimpo" (marca), NUNCA "OC". Se
+     desvanece solo a los ~0.8s (ver JS al final). aria-hidden: decorativo. -->
+<div id="oc-splash" aria-hidden="true"><span>Olimpo</span></div>
 
 <header>
   <div class="marca">
@@ -742,7 +850,11 @@
 
   <!-- VISTA: INVENTARIO -->
   <section id="vista-inventario" class="vista">
-    <h3 class="seccion" style="margin-top:0;">Tus productos</h3>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+      <h3 class="seccion" style="margin-top:0;flex:1;">Tus productos</h3>
+      <!-- Alta libre (+): SOLO dueno. Se revela en cargarInventario() segun rol. -->
+      <button id="btnAltaProducto" class="ir" style="display:none;padding:10px 16px;flex-shrink:0;" onclick="abrirAltaProducto()">+ Agregar</button>
+    </div>
     <div class="filtros-estado" id="filtrosEstado">
       <button data-estado="" class="activo">Todos</button>
       <button data-estado="rojo">Urgente</button>
@@ -942,7 +1054,7 @@
   }
   function ficha(p) {
     const e = estadoDe(p);
-    return { id: p.id, nombre: p.nombre, precio: p.precio, sku: p.sku, barcode: p.barcode, proveedor: p.proveedor, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, categoria: p.categoria, ubicacionId: p.ubicacionId, ubicacionNombre: nombreUbic(p.ubicacionId), perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: e.dias, metodoCosteo: p.metodoCosteo || "FIFO" };
+    return { id: p.id, nombre: p.nombre, precio: p.precio, sku: p.sku, barcode: p.barcode, proveedor: p.proveedor, stockActual: p.stockActual, estado: e.estado, mensaje: e.mensaje, categoria: p.categoria, ubicacionId: p.ubicacionId, ubicacionNombre: nombreUbic(p.ubicacionId), perecible: !!p.perecible, fechaCaducidad: p.fechaCaducidad || null, diasParaVencer: e.dias, metodoCosteo: p.metodoCosteo || "FIFO", foto: p.foto || null };
   }
   function filtrar(uid) { return !uid || uid === "todas" ? productos : productos.filter((p) => p.ubicacionId === uid); }
   function ventasHoyDe(uid) { return ventas.filter((v) => (!uid || uid === "todas" || v.ubicacionId === uid)); }
@@ -1005,6 +1117,22 @@
       }
 
       let m;
+      // Edicion libre de la ficha (nombre/apodo, foto, precios, codigo interno).
+      // El gating por rol (empleado NO edita) vive en la UI; aca solo se aplica.
+      if ((m = path.match(/^\/api\/productos\/([^/]+)$/)) && opts && opts.method === "PATCH") {
+        const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);
+        const CAMPOS = ["nombre", "categoria", "precio", "costo", "proveedor", "foto", "barcode", "sku", "perecible", "fechaCaducidad", "metodoCosteo"];
+        CAMPOS.forEach((k) => { if (body[k] !== undefined) p[k] = (k === "precio" || k === "costo") ? Number(body[k]) || 0 : body[k]; });
+        mov("edicion", { producto: p.nombre, sku: p.sku, ubicacion: nombreUbic(p.ubicacionId) });
+        return J(ficha(p));
+      }
+      // Borrado definitivo (dueno, doble confirmacion en la UI).
+      if ((m = path.match(/^\/api\/productos\/([^/]+)$/)) && opts && opts.method === "DELETE") {
+        const i = productos.findIndex((x) => x.id === m[1]); if (i === -1) return J({ error: "Producto no encontrado." }, 404);
+        const borrado = productos.splice(i, 1)[0];
+        mov("baja", { producto: borrado.nombre, sku: borrado.sku, ubicacion: nombreUbic(borrado.ubicacionId) });
+        return J({ ok: true });
+      }
       if ((m = path.match(/^\/api\/productos\/([^/]+)\/venta$/))) {
         const p = productos.find((x) => x.id === m[1]); if (!p) return J({ error: "Producto no encontrado." }, 404);
         const cant = Number.isInteger(body.cantidad) && body.cantidad > 0 ? body.cantidad : 1;
@@ -1222,6 +1350,9 @@ document.getElementById("filtrosEstado").addEventListener("click", (e) => {
 });
 
 async function cargarInventario(){
+  // El "+" de alta libre es del dueno; el empleado ni lo ve (dos capas).
+  const btnAlta = document.getElementById("btnAltaProducto");
+  if (btnAlta) btnAlta.style.display = (window.OCAuth && window.OCAuth.rolActual() === "dueno") ? "" : "none";
   let url = `${API}/productos?ubicacionId=${ubicacionActual}`;
   if (filtroEstadoActual) url += `&estado=${filtroEstadoActual}`;
   const res = await fetch(url);
@@ -1240,11 +1371,11 @@ async function cargarInventario(){
         <div class="detalle">${p.mensaje}</div>
       </div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:6px;" onclick="event.stopPropagation()">
-        <label style="font-size:12px;color:var(--ink-soft,#5d5340);">Avisar cuando queden ≤
+        <label style="font-size:13px;color:var(--ink-soft,#5d5340);">Avisar cuando queden ≤
           <input type="number" min="1" value="${p.umbralRojo}" data-umbral-input="${p.id}"
             style="width:48px;text-align:center;padding:4px;border:2px solid var(--azul-medio,#2c4a68);border-radius:5px;font-family:var(--font-mono,monospace);margin-left:4px;">
         </label>
-        <button data-umbral-guardar="${p.id}" style="font-size:12px;padding:4px 8px;border:2px solid var(--verde,#2f7a4f);border-radius:5px;background:transparent;color:var(--verde,#2f7a4f);cursor:pointer;">Guardar</button>
+        <button data-umbral-guardar="${p.id}" style="font-size:13px;padding:4px 8px;border:2px solid var(--verde,#2f7a4f);border-radius:5px;background:transparent;color:var(--verde,#2f7a4f);cursor:pointer;">Guardar</button>
       </div>
     </div>
   `).join("");
@@ -1331,7 +1462,10 @@ function mostrarFormNuevoProducto(codigoEscaneado){
   contenedor.innerHTML = `
     <div class="ficha-producto tag-card" style="text-align:left;">
       <div class="titulo">Nuevo producto</div>
-      <div class="linea"><strong>Código:</strong> ${codigoEscaneado}</div>
+      ${codigoEscaneado
+        ? `<div class="linea"><strong>Código:</strong> ${codigoEscaneado}</div>`
+        : `<label style="display:block;margin-top:10px;font-size:14px;">Código de barras / interno<br>
+            <input id="np-barcode" type="text" placeholder="Escanea o escribe el código" style="width:100%;padding:8px;margin-top:4px;border:2px solid var(--azul-medio);border-radius:5px;"></label>`}
       <label style="display:block;margin-top:10px;font-size:14px;">Nombre<br>
         <input id="np-nombre" type="text" style="width:100%;padding:8px;margin-top:4px;border:2px solid var(--azul-medio);border-radius:5px;"></label>
       <label style="display:block;margin-top:10px;font-size:14px;">Categoría<br>
@@ -1370,7 +1504,8 @@ async function crearProductoNuevo(codigoEscaneado){
   const val = (id) => document.getElementById(id).value.trim();
   const perecible = document.getElementById("np-perecible").checked;
   const body = {
-    nombre: val("np-nombre"), categoria: val("np-categoria"), barcode: codigoEscaneado,
+    nombre: val("np-nombre"), categoria: val("np-categoria"),
+    barcode: codigoEscaneado || val("np-barcode"),
     precio: val("np-precio"), costo: val("np-costo"), stockInicial: val("np-stock"), proveedor: val("np-proveedor"),
     ubicacionId: ubicacionActual === "todas" ? "todas" : ubicacionActual,
     perecible, fechaCaducidad: perecible ? val("np-fecha") : null,
@@ -1378,10 +1513,106 @@ async function crearProductoNuevo(codigoEscaneado){
   };
   const msg = document.getElementById("np-msg");
   if (!body.nombre){ msg.style.color = "var(--rojo)"; msg.textContent = "El nombre es obligatorio."; return; }
+  if (!body.barcode){ msg.style.color = "var(--rojo)"; msg.textContent = "El código es obligatorio."; return; }
   const res = await fetch(`${API}/productos`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok){ msg.style.color = "var(--rojo)"; msg.textContent = data.error; return; }
   pintarFicha(data);
+}
+
+// ============================================================================
+// EDICION LIBRE DE LA FICHA (solo dueno) — JFC 2026-07-01:
+// "todo es libremente editable, se sugieren apodos por rapidez y privacidad".
+// El CODIGO INTERNO no cambia al renombrar: solo cambia si el dueno lo digita
+// de nuevo en su campo propio. El empleado NUNCA ve estos botones/campos.
+// ============================================================================
+async function mostrarFormEditarProducto(id){
+  const res = await fetch(`${API}/productos/${id}`);
+  const p = await res.json();
+  const contenedor = document.getElementById("fichaResultado");
+  const q = (s) => String(s == null ? "" : s).replace(/"/g, "&quot;");
+  const inp = 'style="width:100%;padding:8px;margin-top:4px;border:2px solid var(--azul-medio);border-radius:5px;"';
+  contenedor.innerHTML = `
+    <div class="ficha-producto tag-card" style="text-align:left;">
+      <div class="titulo">Editar ficha</div>
+      <label style="display:block;margin-top:10px;font-size:14px;">Nombre — tip: usa un apodo corto (más rápido de leer y más privado)<br>
+        <input id="ed-nombre" type="text" value="${q(p.nombre)}" ${inp}></label>
+      <label style="display:block;margin-top:10px;font-size:14px;">Foto (opcional, se guarda dentro de la ficha)<br>
+        <input id="ed-foto" type="file" accept="image/*" ${inp}></label>
+      ${p.foto ? `<img src="${p.foto}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;margin-top:6px;">` : ""}
+      <div style="display:flex;gap:10px;margin-top:10px;">
+        <label style="flex:1;font-size:14px;">Precio venta<br><input id="ed-precio" type="number" min="0" step="0.01" value="${p.precio}" ${inp}></label>
+        <label style="flex:1;font-size:14px;">Proveedor<br><input id="ed-proveedor" type="text" value="${q(p.proveedor)}" ${inp}></label>
+      </div>
+      <label style="display:block;margin-top:10px;font-size:14px;">Categoría<br>
+        <input id="ed-categoria" type="text" value="${q(p.categoria)}" ${inp}></label>
+      <label style="display:block;margin-top:14px;font-size:14px;color:var(--rust,#b2461f);font-weight:700;">Código interno — NO cambia al renombrar; solo si lo escribes de nuevo aquí<br>
+        <input id="ed-barcode" type="text" value="${q(p.barcode)}" ${inp}></label>
+      <div id="ed-msg" style="font-size:14px;margin-top:10px;font-weight:700;"></div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+        <button class="ir" onclick="guardarEdicionProducto('${p.id}')">Guardar cambios</button>
+        <button onclick="abrirFichaDesdeInventario('${p.id}')">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+// Redimensiona la foto en el navegador (lado mayor 320px, JPEG 82%) y la
+// devuelve como dataURL — se guarda dentro del registro del producto, sin
+// servidor de archivos. Pesa ~15-40KB por foto: aceptable en localStorage/db.
+function leerFotoRedimensionada(fileInput){
+  return new Promise((resolve) => {
+    const f = fileInput && fileInput.files && fileInput.files[0];
+    if (!f) return resolve(null);
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 320, esc = Math.min(1, MAX / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * esc); c.height = Math.round(img.height * esc);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => resolve(null);
+    img.src = URL.createObjectURL(f);
+  });
+}
+
+async function guardarEdicionProducto(id){
+  const v = (x) => document.getElementById(x).value.trim();
+  // OJO: el SKU no se toca aqui — solo el barcode (codigo interno) si el
+  // dueno lo digito. Renombrar jamas altera codigos.
+  const body = { nombre: v("ed-nombre"), precio: v("ed-precio"), proveedor: v("ed-proveedor"), categoria: v("ed-categoria"), barcode: v("ed-barcode") };
+  const foto = await leerFotoRedimensionada(document.getElementById("ed-foto"));
+  if (foto) body.foto = foto;
+  const msg = document.getElementById("ed-msg");
+  if (!body.nombre){ msg.style.color = "var(--rojo)"; msg.textContent = "El nombre es obligatorio."; return; }
+  if (!body.barcode){ msg.style.color = "var(--rojo)"; msg.textContent = "El código interno no puede quedar vacío."; return; }
+  const res = await fetch(`${API}/productos/${id}`, { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok){ msg.style.color = "var(--rojo)"; msg.textContent = data.error; return; }
+  pintarFicha(data);
+  cargarInventario();
+}
+
+// Borrado con RE-confirmacion (pedido explicito: "reconfirmable"): el primer
+// toque arma el boton 4s; el segundo toque ejecuta. Sin ventana modal fea.
+async function eliminarProductoUI(id, btn){
+  if (btn.dataset.armado !== "1"){
+    btn.dataset.armado = "1";
+    btn.textContent = "¿Seguro? Toca otra vez";
+    setTimeout(() => { if (btn && btn.isConnected){ btn.dataset.armado = ""; btn.textContent = "Eliminar"; } }, 4000);
+    return;
+  }
+  const res = await fetch(`${API}/productos/${id}`, { method: "DELETE" });
+  const data = await res.json();
+  if (!res.ok){ alert(data.error); return; }
+  document.getElementById("fichaResultado").innerHTML = `<p style="font-weight:700;">Producto eliminado.</p>`;
+  cargarInventario();
+}
+
+// "+" general del inventario: alta SIN escanear (el codigo se digita a mano).
+function abrirAltaProducto(){
+  document.querySelector('nav button[data-vista="escanear"]').click();
+  mostrarFormNuevoProducto("");
 }
 
 document.getElementById("btnEscanear").addEventListener("click", ejecutarEscaneo);
@@ -1391,8 +1622,12 @@ document.getElementById("inputEscaner").addEventListener("keydown", (e) => {
 
 function pintarFicha(p){
   const contenedor = document.getElementById("fichaResultado");
+  // Editar/Eliminar: SOLO dueno (dos capas de management). El empleado ve la
+  // ficha y vende, pero jamas ve los botones de gestion del catalogo.
+  const esDueno = window.OCAuth && window.OCAuth.rolActual() === "dueno";
   contenedor.innerHTML = `
     <div class="ficha-producto tag-card">
+      ${p.foto ? `<img src="${p.foto}" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:2px solid var(--brass,#a17f37);float:right;margin-left:10px;">` : ""}
       <div class="titulo">${p.nombre}</div>
       <div class="precio">${fmtMoney(p.precio)}</div>
       <div class="linea"><strong>SKU:</strong> ${p.sku}</div>
@@ -1407,6 +1642,10 @@ function pintarFicha(p){
         <button onclick="ajustar('${p.id}', -1)">-1 stock</button>
         <button class="etiqueta" onclick="abrirEtiqueta('${p.id}')">Ver etiqueta</button>
       </div>
+      ${esDueno ? `<div class="acciones-rapidas" style="margin-top:8px;">
+        <button onclick="mostrarFormEditarProducto('${p.id}')">✏️ Editar ficha</button>
+        <button style="border-color:var(--rojo);color:var(--rojo);" onclick="eliminarProductoUI('${p.id}', this)">Eliminar</button>
+      </div>` : ""}
     </div>
     <div id="oc-toast-venta"></div>
   `;
@@ -1479,7 +1718,7 @@ async function cargarEtiquetas(){
       <div class="nombre-prod">${p.nombre}</div>
       <div class="precio-prod">${fmtMoney(p.precio)}</div>
       <div class="sku-prod">${p.sku}</div>
-      ${p.perecible ? `<div style="font-size:12px;font-weight:700;color:var(--rust);margin-top:4px;">🕓 Perecible</div>` : ""}
+      ${p.perecible ? `<div style="font-size:13px;font-weight:700;color:var(--rust);margin-top:4px;">🕓 Perecible</div>` : ""}
     </div>
   `).join("");
 }
@@ -1501,7 +1740,7 @@ async function abrirEtiqueta(id){
     ${p.perecible && p.fechaCaducidad ? `<div style="font-size:13px;font-weight:700;color:var(--rust);">Vence: ${p.fechaCaducidad}</div>` : ""}
     <div class="codigo">${p.barcode}</div>
     <div class="barras" id="barrasClicable" style="cursor:pointer;position:relative;" title="Toca para imprimir o guardar solo el código de barras">${data.barcodeSvg || ""}</div>
-    <div style="font-size:11px;color:var(--azul-medio,#2c4a68);margin-top:-6px;">👆 Toca el código de barras para imprimirlo o guardarlo solo</div>
+    <div style="font-size:13px;color:var(--azul-medio,#2c4a68);margin-top:-6px;">👆 Toca el código de barras para imprimirlo o guardarlo solo</div>
     <img src="${data.qrDataUrl}" width="160" height="160" alt="QR del producto">
     <div style="font-size:13px; color:var(--azul-medio);">Escanea para ver la ficha completa</div>
     <br>
@@ -1738,6 +1977,12 @@ async function cargarDashboardInicial(intento){
   }
 }
 cargarDashboardInicial(0);
+
+// Splash de arranque: visible ~0.8s, fade de 0.45s y se quita del DOM.
+setTimeout(() => {
+  const sp = document.getElementById("oc-splash");
+  if (sp) { sp.classList.add("fuera"); setTimeout(() => sp.remove(), 500); }
+}, 800);
 </script>
 <script src="./crypto-store.js"></script>
 <script src="./email-recovery.js"></script>

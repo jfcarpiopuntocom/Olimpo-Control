@@ -103,6 +103,7 @@ async function toFicha(p) {
     fechaCaducidad: p.fechaCaducidad || null,
     diasParaVencer: dias,
     metodoCosteo: p.metodoCosteo || "FIFO",
+    foto: p.foto || null,
     umbralRojo: p.umbralRojo,
   };
 }
@@ -201,6 +202,23 @@ app.post("/api/productos", asyncRoute(async (req, res) => {
 // --- Umbral de reorden ("mínimo para notificar urgencia"), editable desde
 // la tab Inventario. BUG FIJADO 2026-07-01: este endpoint existía pero
 // ninguna pantalla lo llamaba (encontrado en /review); ver nota en data.js.
+// Edicion libre de la ficha (dueno): nombre/apodo, foto, precios, proveedor y
+// codigo interno. El gating por rol vive en la UI (el empleado nunca ve el
+// boton Editar). En modo Loyverse devuelve error: el catalogo vive en Loyverse.
+app.patch("/api/productos/:id", asyncRoute(async (req, res) => {
+  const r = await data.actualizarProducto(req.params.id, req.body);
+  if (r && r.error) return res.status(400).json({ error: r.error });
+  if (!r) return res.status(404).json({ error: "Producto no encontrado." });
+  res.json(await toFicha(r));
+}));
+
+// Borrado definitivo (dueno, con doble confirmacion en la UI).
+app.delete("/api/productos/:id", asyncRoute(async (req, res) => {
+  const r = await data.eliminarProducto(req.params.id);
+  if (r && r.error) return res.status(400).json({ error: r.error });
+  res.json({ ok: true });
+}));
+
 app.post("/api/productos/:id/umbrales", asyncRoute(async (req, res) => {
   const umbralRojo = Number(req.body.umbralRojo);
   if (!Number.isInteger(umbralRojo) || umbralRojo < 1) {

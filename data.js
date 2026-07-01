@@ -107,6 +107,14 @@ if (MODO_LOYVERSE) {
       return { error: "Con Loyverse conectado, da de alta productos nuevos directamente en Loyverse — Olimpo Control los reflejará automáticamente." };
     },
 
+    async actualizarProducto() {
+      return { error: "Con Loyverse conectado, edita el catálogo directamente en Loyverse — Olimpo Control lo reflejará automáticamente." };
+    },
+
+    async eliminarProducto() {
+      return { error: "Con Loyverse conectado, elimina productos directamente en Loyverse — Olimpo Control lo reflejará automáticamente." };
+    },
+
     async venderUno(id, cantidad) {
       const p = await this.getProducto(id);
       if (!p) return { error: "Producto no encontrado." };
@@ -245,6 +253,28 @@ if (MODO_LOYVERSE) {
       db.get("productos").push(p).write();
       registrarMovimiento("alta", { producto: p.nombre, sku: p.sku, ubicacion: nombreUbicacionLocal(p.ubicacionId) });
       return p;
+    },
+
+    // Edicion libre de la ficha (solo modo demo/local). Lista blanca de campos:
+    // NADA de tocar stockActual por aca (eso va por /ajustar, que deja rastro).
+    async actualizarProducto(id, campos) {
+      const p = db.get("productos").find({ id }).value();
+      if (!p) return null;
+      const CAMPOS = ["nombre", "categoria", "precio", "costo", "proveedor", "foto", "barcode", "sku", "perecible", "fechaCaducidad", "metodoCosteo"];
+      const cambios = {};
+      CAMPOS.forEach((k) => { if (campos[k] !== undefined) cambios[k] = (k === "precio" || k === "costo") ? Number(campos[k]) || 0 : campos[k]; });
+      db.get("productos").find({ id }).assign(cambios).write();
+      const actualizado = db.get("productos").find({ id }).value();
+      registrarMovimiento("edicion", { producto: actualizado.nombre, sku: actualizado.sku, ubicacion: nombreUbicacionLocal(actualizado.ubicacionId) });
+      return actualizado;
+    },
+
+    async eliminarProducto(id) {
+      const p = db.get("productos").find({ id }).value();
+      if (!p) return { error: "Producto no encontrado." };
+      db.get("productos").remove({ id }).write();
+      registrarMovimiento("baja", { producto: p.nombre, sku: p.sku, ubicacion: nombreUbicacionLocal(p.ubicacionId) });
+      return { ok: true };
     },
 
     async venderUno(id, cantidad) {
